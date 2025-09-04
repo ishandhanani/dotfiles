@@ -49,6 +49,12 @@ in
     yq
     ripgrep
     starship
+    jq
+    fzf
+    eza
+    bat
+    zoxide
+    zellij
   ];
   
   # Additional program configurations can be added here later

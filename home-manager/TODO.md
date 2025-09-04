@@ -1,62 +1,5 @@
-# Future Enhancements
-
-Once you're comfortable with the basic setup, consider adding these tools and features:
-
-## Modern CLI Tools
-```nix
-# In home.nix, add to home.packages:
-ripgrep    # Better grep
-fd         # Better find  
-bat        # Better cat with syntax highlighting
-eza        # Better ls with icons
-bottom     # Better top
-jq         # JSON processor
-```
-
-Then update your aliases in `modules/zsh.nix`:
-```nix
-shellAliases = {
-  cat = "bat --style=plain";
-  ls = "eza --color=always --group-directories-first";
-  ll = "eza -la --color=always --group-directories-first";
-  grep = "rg";
-  find = "fd";
-};
-```
-
-## Enhanced Shell Experience
-```nix
-# In modules/zsh.nix, add:
-programs.starship = {
-  enable = true;
-  enableZshIntegration = true;
-  # Custom prompt configuration
-};
-
-programs.atuin = {
-  enable = true;
-  enableZshIntegration = true;
-  # Better shell history
-};
-
-programs.zoxide = {
-  enable = true;
-  enableZshIntegration = true;
-  # Smarter cd command
-};
-```
-
-## Fuzzy Finding
-```nix
-# In home.nix, add:
-programs.fzf = {
-  enable = true;
-  enableZshIntegration = true;
-  defaultCommand = "fd --type f";
-};
-```
-
 ## Tmux Configuration
+
 ```nix
 programs.tmux = {
   enable = true;
@@ -68,6 +11,7 @@ programs.tmux = {
 ```
 
 ## Git Enhancements
+
 ```nix
 # In modules/git.nix, add:
 programs.git.delta = {
@@ -87,6 +31,7 @@ programs.gh = {
 ```
 
 ## Development Tools
+
 ```nix
 # Add language-specific tools as needed:
 home.packages = with pkgs; [
@@ -95,7 +40,7 @@ home.packages = with pkgs; [
   rustup
   nodejs
   python3
-  
+
   # LSPs and formatters
   gopls
   rust-analyzer
@@ -107,13 +52,15 @@ home.packages = with pkgs; [
 ```
 
 ## Vim/Neovim Upgrade
+
 Consider switching to Neovim for better plugin ecosystem:
+
 ```nix
 programs.neovim = {
   enable = true;
   viAlias = true;
   vimAlias = true;
-  
+
   plugins = with pkgs.vimPlugins; [
     nvim-lspconfig
     nvim-cmp
@@ -124,6 +71,7 @@ programs.neovim = {
 ```
 
 ## Directory-Specific Environments
+
 ```nix
 programs.direnv = {
   enable = true;
@@ -133,6 +81,7 @@ programs.direnv = {
 ```
 
 ## SSH Configuration
+
 ```nix
 programs.ssh = {
   enable = true;
@@ -149,6 +98,7 @@ programs.ssh = {
 ## Platform-Specific Tools
 
 ### macOS
+
 ```nix
 home.packages = lib.optionals isDarwin [
   mas  # Mac App Store CLI
@@ -157,6 +107,7 @@ home.packages = lib.optionals isDarwin [
 ```
 
 ### Linux
+
 ```nix
 home.packages = lib.optionals isLinux [
   xclip  # Clipboard support

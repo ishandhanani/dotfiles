@@ -35,18 +35,18 @@ in
       gp = "git push";
       gll = "git log";
       
-      # Shell management
-      editz = "vim ~/.zshrc";
-      sourcez = "source ~/.zshrc";
-      
       # Basic aliases
       v = "vim .";
-      ll = "ls -alh";
       d = "docker";
       dc = "docker compose";
       k = "kubectl";
       m = "make";
       c = "cursor .";
+
+      # Tool aliases
+      cat = "bat --style=plain --paging=never";
+      ls = "eza --color=always --group-directories-first";
+      ll = "eza -la --color=always --group-directories-first";
       
       # Networking
       myip = "curl -s icanhazip.com";
@@ -79,6 +79,11 @@ in
   };
 
   programs.starship = {
+    enable = true;
+    enableZshIntegration = true;
+  };
+
+  programs.atuin = {
     enable = true;
     enableZshIntegration = true;
   };
