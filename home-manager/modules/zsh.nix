@@ -85,7 +85,7 @@ in
         }
         
         # Source AI functions
-        source ${../functions/ai-functions.zsh} > /dev/null 2>&1
+        source ${../functions/ai-functions.sh} > /dev/null 2>&1
       ''
     ];
   };

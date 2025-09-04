@@ -28,9 +28,9 @@
         };
         
         # Linux configuration (if you also use Linux)
-        "ishandhanani@linux" = home-manager.lib.homeManagerConfiguration {
+        "ishandhanani@vm" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];
+          modules = [ ./home-linux.nix ];
         };
       };
     };
