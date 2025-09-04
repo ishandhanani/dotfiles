@@ -40,7 +40,8 @@ in
   
   # Minimal packages - just the essentials
   home.packages = with pkgs; [
-    # Core tools
+    gh
+    delta
     curl
     wget
     git
@@ -49,6 +50,14 @@ in
     yq
     ripgrep
     starship
+    jq
+    fzf
+    eza
+    bat
+    zoxide
+    zellij
+    fd
+    yazi
   ];
   
   # Additional program configurations can be added here later

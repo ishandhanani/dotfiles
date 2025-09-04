@@ -34,19 +34,21 @@ in
       gcb = "git checkout -b";
       gp = "git push";
       gll = "git log";
-      
-      # Shell management
-      editz = "vim ~/.zshrc";
-      sourcez = "source ~/.zshrc";
+      gd = "git diff";
+
       
       # Basic aliases
       v = "vim .";
-      ll = "ls -alh";
       d = "docker";
       dc = "docker compose";
       k = "kubectl";
       m = "make";
       c = "cursor .";
+
+      # Tool aliases
+      cat = "bat --style=plain --paging=never";
+      ls = "eza --color=always --group-directories-first";
+      ll = "eza -la --color=always --group-directories-first";
       
       # Networking
       myip = "curl -s icanhazip.com";
@@ -71,6 +73,16 @@ in
         
         # Source external env if exists
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+
+        # Add yazi q alias to switch cwd
+        # based on https://yazi-rs.github.io/docs/quick-start#shell-wrapper
+        function y() {
+          local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+          yazi "$@" --cwd-file="$tmp"
+          IFS= read -r -d $'\0' cwd ${"<"} "$tmp"
+          [ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && builtin cd -- "$cwd"
+          rm -f -- "$tmp"
+        }
         
         # Source AI functions
         source ${../functions/ai-functions.zsh} > /dev/null 2>&1
@@ -79,6 +91,11 @@ in
   };
 
   programs.starship = {
+    enable = true;
+    enableZshIntegration = true;
+  };
+
+  programs.atuin = {
     enable = true;
     enableZshIntegration = true;
   };
