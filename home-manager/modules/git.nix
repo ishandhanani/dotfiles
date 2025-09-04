@@ -38,4 +38,14 @@
       "*.pyc"
     ];
   };
+
+    programs.git.delta = {
+    enable = true;  # Better git diffs
+    options = {
+      navigate = true;
+      line-numbers = true;
+      side-by-side = true;
+    };
+  };
+
 }

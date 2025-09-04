@@ -34,6 +34,8 @@ in
       gcb = "git checkout -b";
       gp = "git push";
       gll = "git log";
+      gd = "git diff";
+
       
       # Basic aliases
       v = "vim .";
@@ -71,6 +73,16 @@ in
         
         # Source external env if exists
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+
+        # Add yazi q alias to switch cwd
+        # based on https://yazi-rs.github.io/docs/quick-start#shell-wrapper
+        function y() {
+          local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+          yazi "$@" --cwd-file="$tmp"
+          IFS= read -r -d '' cwd < "$tmp"
+          [ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && builtin cd -- "$cwd"
+          rm -f -- "$tmp"
+        }
         
         # Source AI functions
         source ${../functions/ai-functions.zsh} > /dev/null 2>&1
