@@ -4,7 +4,7 @@
   # Basic information about you and your system
   home = {
     username = "ishandhanani";  # Update with your username
-    homeDirectory = "/Users/ishandhanani";
+    homeDirectory = "/home/ishandhanani";
     
     # This value determines the Home Manager release that your
     # configuration is compatible with. This helps avoid breakage
@@ -26,22 +26,20 @@
     ];
   };
   
-  # Import modular configurations
+  # Import modular configurations (Linux-specific)
   imports = [
-    ./modules/zsh.nix
+    ./modules/bash.nix
     ./modules/vim.nix
     ./modules/git.nix
-    ./modules/uvx.nix
   ];
   
-  # Minimal packages - just the essentials
+  # Minimal packages - just the essentials (no uv for Linux)
   home.packages = with pkgs; [
     gh
     delta
     curl
     wget
     git
-    uv 
     ruff
     yq
     ripgrep
@@ -61,8 +59,8 @@
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
   
-  # Fonts configuration (macOS doesn't need fontconfig)
-  fonts.fontconfig.enable = false;
+  # Fonts configuration (Linux)
+  fonts.fontconfig.enable = true;
   
   # News - notify about home-manager news
   news.display = "silent";
