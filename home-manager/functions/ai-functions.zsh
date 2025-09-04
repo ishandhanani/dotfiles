@@ -44,17 +44,13 @@ function gprai() {
     # 1) Figure out current branch
     current_branch=$(git rev-parse --abbrev-ref HEAD)
     
-    # 2) Pick the main ref (prefer origin/main, fall back to local main)
+    # 2) Pick the main ref (prefer origin branches to avoid outdated local refs)
     if git show-ref --verify --quiet refs/remotes/origin/main; then
         base_ref=origin/main
-    elif git show-ref --verify --quiet refs/heads/main; then
-        base_ref=main
     elif git show-ref --verify --quiet refs/remotes/origin/master; then
         base_ref=origin/master
-    elif git show-ref --verify --quiet refs/heads/master; then
-        base_ref=master
     else
-        echo "Error: 'main' or 'master' branch not found locally or on origin."
+        echo "Error: 'origin/main' or 'origin/master' branch not found. Make sure you've fetched from origin."
         return 1
     fi
     
