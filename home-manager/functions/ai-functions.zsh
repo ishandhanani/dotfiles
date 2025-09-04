@@ -24,6 +24,10 @@ $(git diff --cached)
 Respond ONLY with the commit message, nothing else. Make it concise and descriptive.
 EOF
 )
+
+        echo "--- TRUNCATED DIFF ---"
+        echo "${$(git diff --cached | head -n 40)}"
+        echo "--- END DIFF ---"
         git commit -m "$commit_msg"
     else
         echo "No staged changes to commit"
