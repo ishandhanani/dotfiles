@@ -35,6 +35,7 @@ in
     ./modules/zsh.nix
     ./modules/vim.nix
     ./modules/git.nix
+    ./modules/uvx.nix
   ];
   
   # Minimal packages - just the essentials
@@ -47,6 +48,7 @@ in
     ruff
     yq
     ripgrep
+    starship
   ];
   
   # Additional program configurations can be added here later

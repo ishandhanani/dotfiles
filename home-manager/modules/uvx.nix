@@ -3,20 +3,23 @@
 # Tools that I want to specifically install with uvx
 
 let
-  # List of uvx tools you want installed
+  # List of uv tools you want installed
   uvxTools = [ "llm" ];
 in
 {
-  home.activation.installUvTools = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.installUvTools = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
+    echo "🔧 Running uv tools activation script..."
     mkdir -p "$HOME/.local/bin"
 
-    if command -v uvx >/dev/null 2>&1; then
-      echo "Installing uvx tools: ${builtins.concatStringsSep " " uvxTools}"
+    if [ -f "$HOME/.nix-profile/bin/uv" ]; then
+      echo "✅ uv found, installing tools: ${builtins.concatStringsSep " " uvxTools}"
       for tool in ${builtins.concatStringsSep " " uvxTools}; do
-        uvx tool install "$tool" --force
+        echo "📦 Installing $tool..."
+        "$HOME/.nix-profile/bin/uv" tool install "$tool" --force
       done
+      echo "✅ uv tools installation complete"
     else
-      echo "uvx not found in PATH, skipping uvx tool installs"
+      echo "❌ uv not found at $HOME/.nix-profile/bin/uv, skipping uv tool installs"
     fi
   '';
 }
