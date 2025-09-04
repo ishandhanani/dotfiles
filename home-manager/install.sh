@@ -141,12 +141,8 @@ done
 
 # Apply the configuration
 print_step "Applying Home Manager configuration..."
-if command -v home-manager &> /dev/null; then
-    home-manager switch --flake .#$FLAKE_TARGET
-else
-    # Run home-manager in a nix shell if not installed
-    nix run home-manager/master -- switch --flake .#$FLAKE_TARGET
-fi
+# Instead of installing home-manager globally, just use your flake
+nix run home-manager/master -- switch --flake .#ishandhanani@macbook -b backup
 
 if [[ $? -eq 0 ]]; then
     print_success "Home Manager configuration applied successfully!"

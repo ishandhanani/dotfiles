@@ -50,9 +50,7 @@ in
       
       # Networking
       myip = "curl -s icanhazip.com";
-      
-      # Navigation (macOS specific)
-    }
+    };
     
     # Zsh-specific configuration
     initContent = lib.mkMerge [
@@ -75,7 +73,7 @@ in
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
         
         # Source AI functions
-        source ${../functions/ai-functions.zsh}
+        source ${../functions/ai-functions.zsh} > /dev/null 2>&1
       ''
     ];
   };

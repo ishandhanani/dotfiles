@@ -43,12 +43,10 @@ in
     curl
     wget
     git
-    vim
-    
-    # Development basics (uncomment if you need them)
-    # go
-    # nodejs
-    # python3
+    uv 
+    ruff
+    yq
+    ripgrep
   ];
   
   # Additional program configurations can be added here later
