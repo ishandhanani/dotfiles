@@ -120,11 +120,10 @@ fi
 
 # Build the configuration first (without switching)
 print_step "Building configuration..."
-if nix build .#homeConfigurations.$FLAKE_TARGET.activationPackage --no-link 2>/dev/null; then
+if nix build .#homeConfigurations.$FLAKE_TARGET.activationPackage --no-link --show-trace; then
     print_success "Configuration builds successfully"
 else
     print_error "Failed to build configuration"
-    echo "Try running: nix build .#homeConfigurations.$FLAKE_TARGET.activationPackage --show-trace"
     exit 1
 fi
 
