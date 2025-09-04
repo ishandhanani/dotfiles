@@ -23,16 +23,6 @@ in
       rebuild = "home-manager switch";
     };
     
-    # Global session variables
-    sessionVariables = {
-      EDITOR = "vim";
-      BROWSER = if isDarwin then "open" else "firefox";
-      PAGER = "less";
-      # Development
-      GOPATH = "$HOME/go";
-      
-    };
-    
     # Session path additions
     sessionPath = [
       "$HOME/.local/bin"

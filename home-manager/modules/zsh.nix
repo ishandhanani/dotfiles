@@ -20,15 +20,7 @@ in
     sessionVariables = {
       EDITOR = "vim";
       VISUAL = "vim";
-      GPG_TTY = "$(tty)";
     };
-    
-    # Path additions
-    initExtraFirst = ''
-      # Add to PATH early
-      export PATH="$HOME/go/bin:$PATH"
-      export PATH="$HOME/.local/bin:$PATH"
-    '';
     
     # Shell aliases - just the basics
     shellAliases = {
@@ -60,23 +52,31 @@ in
       myip = "curl -s icanhazip.com";
       
       # Navigation (macOS specific)
-    } // lib.optionalAttrs isDarwin {
-      godesk = "cd ~/Desktop";
-      godown = "cd ~/Downloads";
-    };
+    }
     
     # Zsh-specific configuration
-    initExtra = ''
-      # Load edit-command-line widget
-      autoload -Uz edit-command-line
-      zle -N edit-command-line
-      bindkey '^X^E' edit-command-line
+    initContent = lib.mkMerge [
+      # PATH setup (needs to be early)
+      (lib.mkBefore ''
+        # Add to PATH early
+        export GPG_TTY="$(tty)"
+        export PATH="$HOME/go/bin:$PATH"
+        export PATH="$HOME/.local/bin:$PATH"
+      '')
       
-      # Source external env if exists
-      [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
-      
-      # Source AI functions
-      source ${../functions/ai-functions.zsh}
-    '';
+      # Main configuration
+      ''
+        # Load edit-command-line widget
+        autoload -Uz edit-command-line
+        zle -N edit-command-line
+        bindkey '^X^E' edit-command-line
+        
+        # Source external env if exists
+        [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+        
+        # Source AI functions
+        source ${../functions/ai-functions.zsh}
+      ''
+    ];
   };
 }
