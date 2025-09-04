@@ -14,7 +14,7 @@ function git_ai_commit() {
         
         # Generate commit message using AI and commit immediately
         local commit_msg
-        commit_msg=$(llm  << 'EOF' 2>/dev/null
+        commit_msg=$(llm -m 4o  << 'EOF' 2>/dev/null
 Generate a semantic commit message following the format: type(scope): description
 Common types: feat, fix, docs, style, refactor, test, chore
 Here are the staged files:
