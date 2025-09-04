@@ -6,15 +6,15 @@
 # Git AI commit - generates semantic commit messages for staged changes
 function git_ai_commit() {
     if ! git diff --cached --quiet; then
-        # Check if cgpt is available
-        if ! command -v cgpt &> /dev/null; then
-            echo "Error: cgpt is not installed. Please install it first."
+        # Check if llm is available
+        if ! command -v llm &> /dev/null; then
+            echo "Error: llm is not installed. Please install it first."
             return 1
         fi
         
-        # Generate commit message using AI
+        # Generate commit message using AI and commit immediately
         local commit_msg
-        commit_msg=$(cgpt --no-history << 'EOF' 2>/dev/null
+        commit_msg=$(llm  << 'EOF' 2>/dev/null
 Generate a semantic commit message following the format: type(scope): description
 Common types: feat, fix, docs, style, refactor, test, chore
 Here are the staged files:
@@ -24,21 +24,7 @@ $(git diff --cached)
 Respond ONLY with the commit message, nothing else. Make it concise and descriptive.
 EOF
 )
-        
-        # Show the proposed message
-        echo "Proposed commit message:"
-        echo "$commit_msg"
-        echo ""
-        
-        # Ask for confirmation
-        read -q "response?Do you want to use this commit message? (y/N) "
-        echo ""
-        
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            git commit -m "$commit_msg"
-        else
-            echo "Commit cancelled."
-        fi
+        git commit -m "$commit_msg"
     else
         echo "No staged changes to commit"
     fi
@@ -48,9 +34,9 @@ EOF
 function gprai() {
     local current_branch base_ref branch_diff changed_files pr_prompt pr_content
     
-    # Check if cgpt is available
-    if ! command -v cgpt &> /dev/null; then
-        echo "Error: cgpt is not installed. Please install it first."
+    # Check if llm is available
+    if ! command -v llm &> /dev/null; then
+        echo "Error: llm is not installed. Please install it first."
         return 1
     fi
     
@@ -108,8 +94,8 @@ DESCRIPTION:
 PROMPT_EOF
 )
     
-    # 5) Call cgpt with the actual values substituted
-    pr_content=$(echo "$pr_prompt" | sed "s/\${changed_files}/$changed_files/g" | sed "s/\${branch_diff}/$(echo "$branch_diff" | sed 's/[\&/]/\\&/g')/g" | cgpt --no-history 2>/dev/null)
+    # 5) Call llm with the actual values substituted
+    pr_content=$(echo "$pr_prompt" | sed "s/\${changed_files}/$changed_files/g" | sed "s/\${branch_diff}/$(echo "$branch_diff" | sed 's/[\&/]/\\&/g')/g" | llm  2>/dev/null)
     
     # 6) Output the AI response
     printf "%s\n" "$pr_content"
@@ -134,69 +120,9 @@ PROMPT_EOF
     fi
 }
 
-# AI-powered command explanation
-function explain_command() {
-    local cmd="$*"
-    
-    if [[ -z "$cmd" ]]; then
-        echo "Usage: explain_command <command>"
-        return 1
-    fi
-    
-    if ! command -v cgpt &> /dev/null; then
-        echo "Error: cgpt is not installed."
-        return 1
-    fi
-    
-    cgpt --no-history << EOF
-Explain this command in simple terms:
-$cmd
-
-Include:
-1. What the command does
-2. Break down each part/flag
-3. Example use cases
-4. Any warnings or things to be careful about
-EOF
-}
-
-# AI-powered error diagnosis
-function fix_error() {
-    local error_msg="$*"
-    
-    if [[ -z "$error_msg" ]]; then
-        echo "Usage: fix_error <error message>"
-        echo "Or pipe an error: command_that_fails 2>&1 | fix_error"
-        
-        # Check if input is coming from pipe
-        if [[ ! -t 0 ]]; then
-            error_msg=$(cat)
-        else
-            return 1
-        fi
-    fi
-    
-    if ! command -v cgpt &> /dev/null; then
-        echo "Error: cgpt is not installed."
-        return 1
-    fi
-    
-    cgpt --no-history << EOF
-I got this error:
-$error_msg
-
-Please:
-1. Explain what the error means
-2. Suggest how to fix it
-3. Provide the exact commands to run if applicable
-EOF
-}
-
 # Aliases for AI functions
 alias gcai="git_ai_commit"
 alias gprai="gprai"
-alias explain="explain_command"
-alias fixerr="fix_error"
 
 # Export functions so they're available in subshells
 export -f git_ai_commit
