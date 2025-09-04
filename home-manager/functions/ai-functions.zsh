@@ -68,17 +68,17 @@ function gprai() {
         return 1
     fi
     
-    # 4) Build the prompt
-    pr_prompt=$(cat <<'PROMPT_EOF'
+    # 4) Generate PR content using AI
+    pr_content=$(llm -m 4o << EOF 2>/dev/null
 Generate a PR title and description based on these changes.
 Use semantic format: type(scope): description
 Common types: feat, fix, docs, style, refactor, test, chore
 
 Files changed:
-${changed_files}
+$changed_files
 
 Diff:
-${branch_diff}
+$branch_diff
 
 Respond *exactly* in this format:
 
@@ -92,11 +92,8 @@ DESCRIPTION:
 
 ## Testing
 - <how this was tested or should be tested>
-PROMPT_EOF
+EOF
 )
-    
-    # 5) Call llm with the actual values substituted
-    pr_content=$(echo "$pr_prompt" | sed "s/\${changed_files}/$changed_files/g" | sed "s/\${branch_diff}/$(echo "$branch_diff" | sed 's/[\&/]/\\&/g')/g" | llm -m 4o  2>/dev/null)
     
     # 6) Output the AI response
     printf "%s\n" "$pr_content"
