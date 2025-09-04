@@ -1,3 +1,3 @@
 # dotfiles
 
-hello this is new
+using home-manager and nix
