@@ -12,13 +12,6 @@ function git_ai_commit() {
             return 1
         fi
         
-        # Debug: show what we're sending to AI
-        echo "=== DEBUG: Files being sent ==="
-        git diff --cached --name-only
-        echo "=== DEBUG: Diff being sent ==="
-        git diff --cached | head -20
-        echo "=== DEBUG: End ==="
-        
         # Generate commit message using AI and commit immediately
         local commit_msg
         commit_msg=$(llm -m 4o  << EOF 2>/dev/null
@@ -32,9 +25,6 @@ Respond ONLY with the commit message, nothing else. Make it concise and descript
 EOF
 )
 
-        echo "--- TRUNCATED DIFF ---"
-        echo "${$(git diff --cached | head -n 40)}"
-        echo "--- END DIFF ---"
         git commit -m "$commit_msg"
     else
         echo "No staged changes to commit"
