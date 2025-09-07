@@ -39,7 +39,7 @@
     ];
   };
 
-    programs.git.delta = {
+  programs.git.delta = {
     enable = true;  # Better git diffs
     options = {
       navigate = true;
@@ -48,4 +48,7 @@
     };
   };
 
+  programs.gh-dash = {
+    enable = true;  # GitHub CLI
+  };
 }

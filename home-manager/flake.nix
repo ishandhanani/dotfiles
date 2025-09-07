@@ -33,5 +33,10 @@
           modules = [ ./home-linux.nix ];
         };
       };
+
+      formatter = {
+        ${darwinSystem} = nixpkgs.legacyPackages.${darwinSystem}.nixpkgs-fmt;
+        ${linuxSystem} = nixpkgs.legacyPackages.${linuxSystem}.nixpkgs-fmt;
+      };
     };
 }
