@@ -36,6 +36,9 @@ in
       gll = "git log";
       gd = "git diff";
 
+      # Quick navigation
+      godesk = "cd ~/Desktop";
+      gorepo = "cd ~/Documents/repos";
       
       # Basic aliases
       v = "vim .";
