@@ -54,6 +54,7 @@
     zellij
     fd
     yazi
+    gh-dash
   ];
   
   # Additional program configurations can be added here later
