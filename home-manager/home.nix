@@ -57,6 +57,7 @@ in
     yazi
     uv
     gh-dash
+    gh-notify
   ];
   
   # Let Home Manager manage itself
