@@ -1,16 +1,16 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, user, homeDirectory, ... }:
 
+let
+  isDarwin = pkgs.stdenv.isDarwin;
+  isLinux = pkgs.stdenv.isLinux;
+in
 {
-  # Basic information about you and your system
+  # Basic information about you and your system - dynamic detection
   home = {
-    username = "ishandhanani";  # Update with your username
-    homeDirectory = "/Users/ishandhanani";
+    username = user;
+    homeDirectory = homeDirectory;
     
-    # This value determines the Home Manager release that your
-    # configuration is compatible with. This helps avoid breakage
-    # when a new Home Manager release introduces backwards incompatible changes.
-    # Don't change this value unless you know what you're doing.
-    stateVersion = "24.05";  # Please read the comment before changing.
+    stateVersion = "24.05";
     
     # Global shell aliases available to all shells
     shellAliases = {
@@ -26,22 +26,23 @@
     ];
   };
   
-  # Import modular configurations
+  # Import modular configurations - conditional based on platform
   imports = [
-    ./modules/zsh.nix
     ./modules/vim.nix
     ./modules/git.nix
+    ./modules/zsh.nix
     ./modules/uvx.nix
+    ./modules/bash.nix
   ];
   
-  # Minimal packages - just the essentials
+  # Unified packages with platform-specific additions
   home.packages = with pkgs; [
+    # Core packages for all platforms
     gh
     delta
     curl
     wget
     git
-    uv 
     ruff
     yq
     ripgrep
@@ -54,16 +55,15 @@
     zellij
     fd
     yazi
+    uv
     gh-dash
   ];
-  
-  # Additional program configurations can be added here later
   
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
   
-  # Fonts configuration (macOS doesn't need fontconfig)
-  fonts.fontconfig.enable = false;
+  # Platform-specific font configuration
+  fonts.fontconfig.enable = isLinux;
   
   # News - notify about home-manager news
   news.display = "silent";

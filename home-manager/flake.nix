@@ -22,15 +22,31 @@
       # Home Manager configurations
       homeConfigurations = {
         # macOS configuration
-        "ishandhanani@macbook" = home-manager.lib.homeManagerConfiguration {
+        "home" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${darwinSystem};
           modules = [ ./home.nix ];
+          extraSpecialArgs = {
+            user = "ishandhanani";
+            homeDirectory = "/Users/ishandhanani";
+          };
+        };
+
+        "work" = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${darwinSystem};
+          modules = [ ./home.nix ];
+          extraSpecialArgs = {
+            user = "idhanani";
+            homeDirectory = "/Users/idhanani";
+          };
         };
         
-        # Linux configuration (if you also use Linux)
-        "ishandhanani@vm" = home-manager.lib.homeManagerConfiguration {
+        "brev-vm" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${linuxSystem};
           modules = [ ./home-linux.nix ];
+          extraSpecialArgs = {
+            user = "ubuntu";
+            homeDirectory = "/home/ubuntu";
+          };
         };
       };
 
