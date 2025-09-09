@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 HOMEDIR="$1"
-BASHRC="$HOMEDIR/.bashrc"
+BASHRC="~/.bashrc"
 
 # Append the content into .bashrc
 cat << EOF >> "$BASHRC"
