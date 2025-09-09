@@ -1,16 +1,17 @@
 #!/bin/bash
 
-# Check if homedir argument was provided
-if [ -z "$1" ]; then
-    echo "Usage: $0 <homedir>"
-    echo "Example: $0 /home/myuser"
+# Check if both arguments are provided
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <me_directory> <HOME>"
+    echo "Example: $0 /scratch/myuser /home/myuser"
     exit 1
 fi
 
-HOMEDIR="$1"
-BASHRC="~/.bashrc"
+ME_DIR="$1"
+USER_HOME="$2"
+BASHRC="$USER_HOME/.bashrc"
 
-# Append the content into .bashrc
+# Append the content into ~/.bashrc inside USER_HOME
 cat << EOF >> "$BASHRC"
 
 # === Custom Aliases and Functions ===
@@ -18,8 +19,8 @@ cat << EOF >> "$BASHRC"
 # Alias to show Slurm accounts for current user
 alias myacct='sacctmgr -nP show assoc where user=\$(whoami) format=account'
 
-# Alias 'me' to home directory provided as argument
-alias me="cd $HOMEDIR"
+# Alias 'me' to the directory passed as first argument
+alias me="cd $ME_DIR"
 
 # Enroot container creation
 enc() {
