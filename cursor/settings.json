@@ -1,0 +1,119 @@
+{
+    "explorer.compactFolders": false,
+    "editor.suggestSelection": "first",
+    "vim.easymotion": true,
+    "vim.easymotionMarkerForegroundColorTwoCharFirst": "#d700e5",
+    "vim.easymotionMarkerForegroundColorTwoCharSecond": "#d700e5",
+    "vim.easymotionMarkerForegroundColorOneChar": "#d700e5",
+    "vim.easymotionDimBackground": false,
+    "vim.useSystemClipboard": true,
+    "vim.camelCaseMotion.enable": true,
+    "vim.leader": "<tab>",
+    "vim.startInInsertMode": false,
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before": [
+                " "
+            ],
+            "after": [
+                "leader",
+                "leader",
+                "leader",
+                "b",
+                "d",
+                "w"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "r"
+            ],
+            "commands": [
+                "editor.action.goToReferences"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "n"
+            ],
+            "commands": [
+                "editor.action.rename"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "i"
+            ],
+            "commands": [
+                "editor.action.goToImplementation"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "e"
+            ],
+            "commands": [
+                "workbench.action.navigateToLastEditLocation"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "p"
+            ],
+            "commands": [
+                "editor.action.triggerParameterHints"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "m"
+            ],
+            "commands": [
+                "editor.action.marker.next"
+            ]
+        },
+        {
+            "before": [
+                "g",
+                "t"
+            ],
+            "commands": [
+                "go.test.cursorOrPrevious"
+            ]
+        }
+    ],
+    "editor.smoothScrolling": true,
+    "editor.formatOnSave": true,
+    "remote.SSH.connectTimeout": 120,
+    "go.toolsManagement.autoUpdate": true,
+    "editor.inlineSuggest.enabled": true,
+    "window.autoDetectColorScheme": true,
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": true,
+        "scminput": false,
+        "yaml": true,
+        "go": true
+    },
+    "remote.SSH.logLevel": "trace",
+    "[python]": {
+        "editor.formatOnType": true
+    },
+    "workbench.colorTheme": "Default Light Modern",
+    "github.copilot.editor.enableAutoCompletions": true,
+    "githubPullRequests.pushBranch": "always",
+    "cursor.cpp.disabledLanguages": [
+        "plaintext",
+        "scminput"
+    ],
+    "workbench.preferredDarkColorTheme": "Default Dark Modern",
+    "workbench.editor.enablePreview": false,
+    "editor.accessibilitySupport": "off"
+}
