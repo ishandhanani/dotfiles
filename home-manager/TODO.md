@@ -1,56 +1,3 @@
-## Tmux Configuration
-
-```nix
-programs.tmux = {
-  enable = true;
-  terminal = "screen-256color";
-  keyMode = "vi";
-  mouse = true;
-  # Add your tmux configuration
-};
-```
-
-## Git Enhancements
-
-```nix
-# In modules/git.nix, add:
-programs.git.delta = {
-  enable = true;  # Better git diffs
-  options = {
-    navigate = true;
-    line-numbers = true;
-  };
-};
-
-programs.gh = {
-  enable = true;  # GitHub CLI
-  settings = {
-    git_protocol = "ssh";
-  };
-};
-```
-
-## Development Tools
-
-```nix
-# Add language-specific tools as needed:
-home.packages = with pkgs; [
-  # Languages
-  go
-  rustup
-  nodejs
-  python3
-
-  # LSPs and formatters
-  gopls
-  rust-analyzer
-  nodePackages.typescript-language-server
-  nodePackages.prettier
-  black
-  ruff
-];
-```
-
 ## Vim/Neovim Upgrade
 
 Consider switching to Neovim for better plugin ecosystem:
@@ -80,21 +27,6 @@ programs.direnv = {
 };
 ```
 
-## SSH Configuration
-
-```nix
-programs.ssh = {
-  enable = true;
-  matchBlocks = {
-    "myserver" = {
-      hostname = "server.example.com";
-      user = "myuser";
-      identityFile = "~/.ssh/id_ed25519";
-    };
-  };
-};
-```
-
 ## Platform-Specific Tools
 
 ### macOS
@@ -114,14 +46,6 @@ home.packages = lib.optionals isLinux [
   firefox
 ];
 ```
-
-## Gradual Migration Strategy
-
-1. **Start small**: Get comfortable with the basic setup first
-2. **Add one tool at a time**: Test each addition thoroughly
-3. **Learn the Nix way**: Understand how each tool is configured in Nix
-4. **Keep notes**: Document what works for your workflow
-5. **Rollback if needed**: `home-manager generations` and `home-manager rollback`
 
 ## Resources
 
