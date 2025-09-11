@@ -33,6 +33,7 @@ in
     ./modules/zsh.nix
     ./modules/uvx.nix
     ./modules/bash.nix
+    ./modules/ssh.nix
   ];
   
   # Unified packages with platform-specific additions
