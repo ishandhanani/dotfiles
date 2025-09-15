@@ -8,6 +8,7 @@
     extraConfig = ''
       # Include your existing SSH config first
       Include ~/.ssh/config.local
+      Include ~/.brev/ssh_config
       
       # Home Manager managed settings
       UseKeychain yes
