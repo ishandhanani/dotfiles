@@ -1,24 +1,26 @@
 { config, pkgs, lib, ... }:
 
 {
+  # Enable SSH support
   programs.ssh = {
     enable = true;
-    
-    # SSH client configuration that includes your existing config
+
+    # Drop the default Host * block that Home-Manager inserts
+    matchBlocks = { };
+
+    # Add just what you want in your config
     extraConfig = ''
-      # Include your existing SSH config first
       Include ~/.ssh/config.local
       Include ~/.brev/ssh_config
-      
-      # Home Manager managed settings
-      UseKeychain yes
-      AddKeysToAgent yes
-      IdentitiesOnly yes
+
+      # Home-Manager managed defaults
+      UseKeychain yes          # macOS: store passphrases in keychain
+      AddKeysToAgent yes       # auto-load keys into ssh-agent
+      IdentitiesOnly yes       # only use explicitly-listed keys
     '';
   };
 
-  # SSH Agent service (Linux only - macOS handles this automatically)
-  services.ssh-agent = {
-    enable = pkgs.stdenv.isLinux;
-  };
+  # macOS doesn’t need ssh-agent service — only enable on Linux
+  services.ssh-agent.enable = pkgs.stdenv.isLinux;
 }
+
