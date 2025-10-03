@@ -78,6 +78,9 @@ in
         
         # Source external env if exists
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+        
+        # Source Cargo environment if it exists
+        [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
         # Add yazi q alias to switch cwd
         # based on https://yazi-rs.github.io/docs/quick-start#shell-wrapper
