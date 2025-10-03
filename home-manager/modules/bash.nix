@@ -45,6 +45,9 @@
       
       # Networking
       myip = "curl -s icanhazip.com";
+
+      # venv
+      venv = "source .venv/bin/activate";
     };
     
     # Bash-specific configuration

@@ -55,6 +55,9 @@ in
       
       # Networking
       myip = "curl -s icanhazip.com";
+
+      # venv
+      venv = "source .venv/bin/activate";
     };
     
     # Zsh-specific configuration
