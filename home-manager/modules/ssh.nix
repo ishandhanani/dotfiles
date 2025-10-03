@@ -4,7 +4,6 @@
   # Enable SSH support
   programs.ssh = {
     enable = true;
-    enableDefaultConfig = false;  # Add this line
 
     # Drop the default Host * block that Home-Manager inserts
     matchBlocks = { };
