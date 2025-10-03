@@ -23,6 +23,7 @@ in
     sessionPath = [
       "$HOME/.local/bin"
       "$HOME/go/bin"
+      "$HOME/.cargo/bin"
     ];
   };
   
