@@ -14,6 +14,7 @@
     sessionVariables = {
       EDITOR = "vim";
       VISUAL = "vim";
+      RUSTC_WRAPPER = "sccache";
     };
     
     # Shell aliases - same as zsh

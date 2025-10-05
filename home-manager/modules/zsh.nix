@@ -20,6 +20,7 @@ in
     sessionVariables = {
       EDITOR = "vim";
       VISUAL = "vim";
+      RUSTC_WRAPPER = "sccache";
     };
     
     # Shell aliases - just the basics

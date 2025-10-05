@@ -59,6 +59,7 @@ in
     uv
     gh-dash
     gh-notify
+    sccache
   ];
   
   # Let Home Manager manage itself
