@@ -30,6 +30,7 @@
       gp = "git push";
       gll = "git log";
       gd = "git diff";
+      gco = "git checkout";
 
       # Basic aliases
       v = "vim .";

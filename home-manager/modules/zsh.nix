@@ -36,6 +36,7 @@ in
       gp = "git push";
       gll = "git log";
       gd = "git diff";
+      gco = "git checkout";
 
       # Quick navigation
       godesk = "cd ~/Desktop";
