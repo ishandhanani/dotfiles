@@ -12,11 +12,6 @@
     extraConfig = ''
       Include ~/.ssh/config.local
       Include ~/.brev/ssh_config
-
-      # Home-Manager managed defaults
-      UseKeychain yes          # macOS: store passphrases in keychain
-      AddKeysToAgent yes       # auto-load keys into ssh-agent
-      IdentitiesOnly yes       # only use explicitly-listed keys
     '';
   };
 

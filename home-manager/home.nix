@@ -60,6 +60,7 @@ in
     gh-dash
     gh-notify
     sccache
+    nvtop
   ];
   
   # Let Home Manager manage itself
