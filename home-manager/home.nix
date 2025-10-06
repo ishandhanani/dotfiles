@@ -60,7 +60,7 @@ in
     gh-dash
     gh-notify
     sccache
-    nvtop
+    nvtopPackages.nvidia
   ];
   
   # Let Home Manager manage itself
