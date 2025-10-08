@@ -99,6 +99,9 @@ in
         
         # Source AI functions
         source ${../functions/ai-functions.sh} > /dev/null 2>&1
+
+        # Source local machine-specific configs 
+        [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"
       ''
     ];
   };

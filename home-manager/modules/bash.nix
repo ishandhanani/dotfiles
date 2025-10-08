@@ -76,6 +76,9 @@
       
       # Source AI functions (bash version)
       source ${../functions/ai-functions.sh} > /dev/null 2>&1 || true
+
+      # source local machine-specific configs 
+      [ -f "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
     '';
   };
 
