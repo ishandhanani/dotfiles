@@ -1,7 +1,7 @@
 # Home Manager Makefile
 # Simple commands to manage your Nix configuration
 
-.PHONY: help install work home vm clean backup check
+.PHONY: help install work home vm vm-arm clean backup check
 
 # Colors
 GREEN := \033[0;32m
@@ -78,10 +78,16 @@ home: backup check ## Apply home configuration (ishandhanani@macbook)
 	@echo "$(GREEN)✓ Home configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
-vm: backup check ## Apply VM configuration (ubuntu@linux)
+vm: backup check ## Apply VM configuration (ubuntu@linux x86_64)
 	@echo "$(BLUE)==> Applying VM configuration...$(NC)"
 	@nix run home-manager/master -- switch --flake .#brev-vm -b backup
 	@echo "$(GREEN)✓ VM configuration applied successfully!$(NC)"
+	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
+
+vm-arm: backup check ## Apply VM configuration (ubuntu@linux aarch64)
+	@echo "$(BLUE)==> Applying ARM VM configuration...$(NC)"
+	@nix run home-manager/master -- switch --flake .#brev-vm-arm -b backup
+	@echo "$(GREEN)✓ ARM VM configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
 rebuild: check ## Quick rebuild current configuration
