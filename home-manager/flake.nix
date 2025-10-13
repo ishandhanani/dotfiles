@@ -41,7 +41,7 @@
         };
         
         "brev-vm" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
+          pkgs = nixpkgs.legacyPackages.${builtins.currentSystem};
           modules = [ ./home.nix ];  # Use the same file with conditionals
           extraSpecialArgs = {
             user = "ubuntu";
