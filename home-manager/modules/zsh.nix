@@ -34,7 +34,7 @@ in
       gf = "git fetch";
       gcb = "git checkout -b";
       gp = "git push";
-      gll = "git log";
+      gll = "git log --oneline";
       gd = "git diff";
       gco = "git checkout";
 
