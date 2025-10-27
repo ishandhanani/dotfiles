@@ -32,7 +32,7 @@ install: ## Install Nix using official installer
 	@echo "$(BLUE)==> Installing Nix with official installer...$(NC)"
 	@if ! command -v nix &> /dev/null; then \
 		echo "$(YELLOW)Installing Nix for $(OS) ($(ARCH))...$(NC)"; \
-		curl -L https://nixos.org/nix/install | sudo sh -s -- --daemon; \
+		curl -L https://nixos.org/nix/install | sh -s -- --daemon; \
 		echo "$(GREEN)✓ Nix installed successfully$(NC)"; \
 		echo "$(YELLOW)! Please restart your terminal and run 'make work/home/vm'$(NC)"; \
 	else \
