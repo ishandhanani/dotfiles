@@ -50,10 +50,14 @@ in
       m = "make";
       c = "cursor .";
 
+      # ai 
+      ai = "y-cli chat";
+
       # Tool aliases
       cat = "bat --style=plain --paging=never";
       ls = "eza --color=always --group-directories-first";
       ll = "eza -la --color=always --group-directories-first";
+      tree = "eza --tree";
       
       # Networking
       myip = "curl -s icanhazip.com";

@@ -9,7 +9,6 @@
       ale
       vim-auto-save
       tabular
-      vim-markdown
       jellybeans-vim
     ];
     
