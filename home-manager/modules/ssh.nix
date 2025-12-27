@@ -9,7 +9,7 @@
         user = "git";
         identityFile = "~/.ssh/id_ed25519";
         identitiesOnly = true;
-        addKeysToAgent = true;
+        addKeysToAgent = "yes";
       };
     };
     extraConfig = ''
