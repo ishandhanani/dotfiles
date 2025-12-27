@@ -9,6 +9,7 @@
         user = "git";
         identityFile = "~/.ssh/id_ed25519";
         identitiesOnly = true;
+        addKeysToAgent = true;
       };
     };
     extraConfig = ''
@@ -19,6 +20,7 @@
         PreferredAuthentications publickey
         PubkeyAuthentication yes
         PasswordAuthentication no
+        ServerAliveInterval 60
         ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
       Include ~/.ssh/config.local
       Include ~/.brev/ssh_config
@@ -30,9 +32,7 @@
 
   # macOS-specific helper: automatically add key to agent/keychain
   home.activation.sshAddKey = lib.mkIf pkgs.stdenv.isDarwin ''
-    if [ -f ~/.ssh/id_ed25519 ]; then
-      /usr/bin/ssh-add --apple-use-keychain ~/.ssh/id_ed25519 2>/dev/null || true
-    fi
+    /usr/bin/ssh-add --apple-use-keychain ~/.ssh/id_ed25519 || true
   '';
 
   # Linux: add your key automatically on login if agent is running
