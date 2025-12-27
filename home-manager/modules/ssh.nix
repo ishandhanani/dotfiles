@@ -37,8 +37,8 @@
 
   # Linux: add your key automatically on login if agent is running
   home.activation.sshAddKeyLinux = lib.mkIf pkgs.stdenv.isLinux ''
+    eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
     if [ -f ~/.ssh/id_ed25519 ]; then
-      eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
       ssh-add -l >/dev/null 2>&1 || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1 || true
     fi
   '';
