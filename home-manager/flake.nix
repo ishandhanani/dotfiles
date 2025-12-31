@@ -48,6 +48,15 @@
             homeDirectory = "/home/ubuntu";
           };
         };
+
+        "simbox" = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${linuxSystem};
+          modules = [ ./home.nix ];  # Use the same file with conditionals
+          extraSpecialArgs = {
+            user = "ishan";
+            homeDirectory = "/home/ishan";
+          };
+        };
         
         "brev-vm-arm" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages."aarch64-linux";
