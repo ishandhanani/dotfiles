@@ -7,14 +7,14 @@
       "github.com" = {
         hostname = "github.com";
         user = "git";
-        identityFile = "~/.ssh/id_ed25519";
+        identityFile = "~/.ssh/id_ed2551";
         identitiesOnly = true;
         addKeysToAgent = "yes";
       };
     };
     extraConfig = ''
       Host *
-        IdentityFile ~/.ssh/id_ed25519
+        IdentityFile ~/.ssh/id_ed2551
         AddKeysToAgent yes
         IdentitiesOnly yes
         PreferredAuthentications publickey
@@ -32,14 +32,14 @@
 
   # macOS-specific helper: automatically add key to agent/keychain
   home.activation.sshAddKey = lib.mkIf pkgs.stdenv.isDarwin ''
-    /usr/bin/ssh-add --apple-use-keychain ~/.ssh/id_ed25519 || true
+    /usr/bin/ssh-add --apple-use-keychain ~/.ssh/id_ed2551 || true
   '';
 
   # Linux: add your key automatically on login if agent is running
   home.activation.sshAddKeyLinux = lib.mkIf pkgs.stdenv.isLinux ''
     eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
-    if [ -f ~/.ssh/id_ed25519 ]; then
-      ssh-add -l >/dev/null 2>&1 || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1 || true
+    if [ -f ~/.ssh/id_ed2551 ]; then
+      ssh-add -l >/dev/null 2>&1 || ssh-add ~/.ssh/id_ed2551 >/dev/null 2>&1 || true
     fi
   '';
 }
