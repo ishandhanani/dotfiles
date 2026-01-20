@@ -1,5 +1,5 @@
-# Home Manager Makefile
-# Simple commands to manage your Nix configuration
+# Dotfiles Makefile
+# Commands to manage Nix configuration and Claude Code setup
 
 .PHONY: help install work home vm vm-arm clean backup check claude
 
@@ -17,8 +17,8 @@ USERNAME := $(shell whoami)
 BACKUP_DIR := $(HOME)/.dotfiles-backup-$(shell date +%Y%m%d-%H%M%S)
 
 help: ## Show this help message
-	@echo "$(BLUE)Home Manager Makefile$(NC)"
-	@echo "====================="
+	@echo "$(BLUE)Dotfiles Makefile$(NC)"
+	@echo "=================="
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-12s$(NC) %s\n", $$1, $$2}'
@@ -52,7 +52,7 @@ install: ## Install Nix using official installer
 
 check: ## Check if configuration builds without applying
 	@echo "$(BLUE)==> Checking configuration...$(NC)"
-	@nix flake check --show-trace
+	@cd home-manager && nix flake check --show-trace
 	@echo "$(GREEN)✓ Configuration check passed$(NC)"
 
 backup: ## Backup existing dotfiles
@@ -68,25 +68,25 @@ backup: ## Backup existing dotfiles
 
 work: backup check ## Apply work configuration (idhanani@macbook)
 	@echo "$(BLUE)==> Applying work configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#work -b backup
+	@nix run home-manager/master -- switch --flake ./home-manager#work -b backup
 	@echo "$(GREEN)✓ Work configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
 home: backup check ## Apply home configuration (ishandhanani@macbook)
 	@echo "$(BLUE)==> Applying home configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#home -b backup
+	@nix run home-manager/master -- switch --flake ./home-manager#home -b backup
 	@echo "$(GREEN)✓ Home configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
 vm: backup check ## Apply VM configuration (ubuntu@linux x86_64)
 	@echo "$(BLUE)==> Applying VM configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#brev-vm -b backup
+	@nix run home-manager/master -- switch --flake ./home-manager#brev-vm -b backup
 	@echo "$(GREEN)✓ VM configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
 vm-arm: backup check ## Apply VM configuration (ubuntu@linux aarch64)
 	@echo "$(BLUE)==> Applying ARM VM configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#brev-vm-arm -b backup
+	@nix run home-manager/master -- switch --flake ./home-manager#brev-vm-arm -b backup
 	@echo "$(GREEN)✓ ARM VM configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
 
@@ -94,7 +94,7 @@ rebuild: check ## Quick rebuild current configuration
 	@echo "$(BLUE)==> Rebuilding current configuration...$(NC)"
 	@echo "$(YELLOW)Please specify which config to rebuild:$(NC)"
 	@echo "  make work   - for work config"
-	@echo "  make home   - for home config"  
+	@echo "  make home   - for home config"
 	@echo "  make vm     - for VM config"
 
 clean: ## Clean up Nix store and old generations
@@ -105,7 +105,7 @@ clean: ## Clean up Nix store and old generations
 
 update: ## Update flake inputs
 	@echo "$(BLUE)==> Updating flake inputs...$(NC)"
-	@nix flake update
+	@cd home-manager && nix flake update
 	@echo "$(GREEN)✓ Flake inputs updated$(NC)"
 
 generations: ## Show home-manager generations
@@ -119,5 +119,5 @@ rollback: ## Rollback to previous generation
 
 claude: ## Setup Claude Code configuration (symlinks to ~/.claude/)
 	@echo "$(BLUE)==> Setting up Claude Code configuration...$(NC)"
-	@cd ../claude && ./setup.sh
+	@./claude/setup.sh
 	@echo "$(GREEN)✓ Claude Code configuration applied$(NC)"
