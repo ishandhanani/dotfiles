@@ -1,7 +1,7 @@
 # Home Manager Makefile
 # Simple commands to manage your Nix configuration
 
-.PHONY: help install work home vm vm-arm clean backup check
+.PHONY: help install work home vm vm-arm clean backup check claude
 
 # Colors
 GREEN := \033[0;32m
@@ -116,3 +116,8 @@ rollback: ## Rollback to previous generation
 	@echo "$(BLUE)==> Rolling back to previous generation...$(NC)"
 	@home-manager rollback
 	@echo "$(GREEN)✓ Rolled back successfully$(NC)"
+
+claude: ## Setup Claude Code configuration (symlinks to ~/.claude/)
+	@echo "$(BLUE)==> Setting up Claude Code configuration...$(NC)"
+	@cd ../claude && ./setup.sh
+	@echo "$(GREEN)✓ Claude Code configuration applied$(NC)"
