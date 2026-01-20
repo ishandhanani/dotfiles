@@ -54,7 +54,7 @@ echo "  ~/.claude/settings.json"
 echo ""
 echo "To install team plugin, run in Claude Code:"
 echo "  /plugin marketplace add https://github.com/ishandhanani/dynamo-claude-plugin"
-echo "  /plugin install workflow-tools@dynamo-dev"
+echo "  /plugin install dynamo@dynamo-dev"
 echo ""
 if [[ -d "$BACKUP_DIR" ]]; then
     echo "Previous config backed up to: $BACKUP_DIR"
