@@ -68,14 +68,11 @@ in
     
     # Zsh-specific configuration
     initContent = lib.mkMerge [
-      # PATH setup (needs to be early)
+      # Early setup (PATH is handled by sessionPath in home.nix)
       (lib.mkBefore ''
-        # Add to PATH early
         export GPG_TTY="$(tty)"
-        export PATH="$HOME/go/bin:$PATH"
-        export PATH="$HOME/.local/bin:$PATH"
       '')
-      
+
       # Main configuration
       ''
         # Load edit-command-line widget
@@ -101,8 +98,25 @@ in
           rm -f -- "$tmp"
         }
         
-        # Source AI functions
-        source ${../functions/ai-functions.sh} > /dev/null 2>&1
+        # Lazy-load AI functions for faster shell startup
+        _ai_functions_loaded=0
+        _load_ai_functions() {
+          if [ "$_ai_functions_loaded" -eq 0 ]; then
+            source ${../functions/ai-functions.sh} > /dev/null 2>&1
+            _ai_functions_loaded=1
+          fi
+        }
+
+        # Create lazy-loading wrappers for AI commands
+        gcai() {
+          _load_ai_functions
+          git_ai_commit "$@"
+        }
+
+        gprai() {
+          _load_ai_functions
+          gprai "$@"
+        }
 
         # Source local machine-specific configs 
         [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"
@@ -113,6 +127,11 @@ in
   programs.starship = {
     enable = true;
     enableZshIntegration = true;
+
+    # Only override timeout to prevent hangs
+    settings = {
+      command_timeout = 100;
+    };
   };
 
   programs.atuin = {
