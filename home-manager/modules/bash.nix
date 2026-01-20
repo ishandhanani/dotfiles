@@ -55,11 +55,9 @@
     
     # Bash-specific configuration
     initExtra = ''
-      # PATH setup
+      # PATH is handled by sessionPath in home.nix
       export GPG_TTY="$(tty)"
-      export PATH="$HOME/go/bin:$PATH"
-      export PATH="$HOME/.local/bin:$PATH"
-      
+
       # Source external env if exists
       [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
       
@@ -75,8 +73,25 @@
         rm -f -- "$tmp"
       }
       
-      # Source AI functions (bash version)
-      source ${../functions/ai-functions.sh} > /dev/null 2>&1 || true
+      # Lazy-load AI functions for faster shell startup
+      _ai_functions_loaded=0
+      _load_ai_functions() {
+        if [ "$_ai_functions_loaded" -eq 0 ]; then
+          source ${../functions/ai-functions.sh} > /dev/null 2>&1 || true
+          _ai_functions_loaded=1
+        fi
+      }
+
+      # Create lazy-loading wrappers for AI commands
+      gcai() {
+        _load_ai_functions
+        git_ai_commit "$@"
+      }
+
+      gprai() {
+        _load_ai_functions
+        gprai "$@"
+      }
 
       # source local machine-specific configs 
       [ -f "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
@@ -86,6 +101,11 @@
   programs.starship = {
     enable = true;
     enableBashIntegration = true;
+
+    # Only override timeout to prevent hangs
+    settings = {
+      command_timeout = 100;
+    };
   };
 
   programs.atuin = {

@@ -18,11 +18,12 @@
       syntax on
       colorscheme jellybeans
       
-      " ALE 
-      let g:ale_lint_on_text_changed = 'always'  
-      let g:ale_lint_on_insert_leave = 1        
+      " ALE - Optimized for performance
+      let g:ale_lint_on_text_changed = 'normal'  " Only lint in normal mode, not while typing
+      let g:ale_lint_delay = 300                 " Debounce linting by 300ms
+      let g:ale_lint_on_insert_leave = 1
       " Make sure linting happens when entering a buffer and when saving
-      let g:ale_lint_on_enter = 1              
+      let g:ale_lint_on_enter = 1
       let g:ale_lint_on_save = 1              
       " Make sure highlighting is working properly
       let g:ale_set_highlights = 1
