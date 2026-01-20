@@ -3,7 +3,6 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$HOME/.claude"
-PLUGINS_DIR="$CLAUDE_DIR/plugins"
 BACKUP_DIR="$HOME/.claude-backup-$(date +%Y%m%d-%H%M%S)"
 
 echo "Claude Code config setup"
@@ -38,40 +37,24 @@ create_link() {
     fi
 }
 
-# Ensure directories exist
+# Ensure directory exists
 mkdir -p "$CLAUDE_DIR"
-mkdir -p "$PLUGINS_DIR"
 
 echo "Setting up user config..."
 echo "-------------------------"
-# User-level config (CLAUDE.md, settings.json)
 create_link "$SCRIPT_DIR/user/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 create_link "$SCRIPT_DIR/user/settings.json" "$CLAUDE_DIR/settings.json"
 
 echo ""
-echo "Setting up plugin..."
-echo "--------------------"
-# Plugin (symlink for development - changes reflect immediately)
-create_link "$SCRIPT_DIR/plugin" "$PLUGINS_DIR/workflow-tools"
-
-echo ""
 echo "Setup complete!"
 echo ""
-echo "User config:"
+echo "User config installed:"
 echo "  ~/.claude/CLAUDE.md"
 echo "  ~/.claude/settings.json"
 echo ""
-echo "Plugin installed:"
-echo "  ~/.claude/plugins/workflow-tools"
-echo ""
-echo "Commands available:"
-echo "  /workflow-tools:commit"
-echo "  /workflow-tools:pr-create"
-echo "  /workflow-tools:debug-session"
-echo ""
-echo "Skills available:"
-echo "  spec-refine (auto-activates on spec discussions)"
-echo "  spec-to-tasks (auto-activates on task breakdown)"
+echo "To install team plugin, run in Claude Code:"
+echo "  /plugin marketplace add https://github.com/ishandhanani/dynamo-claude-plugin"
+echo "  /plugin install workflow-tools@dynamo-dev"
 echo ""
 if [[ -d "$BACKUP_DIR" ]]; then
     echo "Previous config backed up to: $BACKUP_DIR"
