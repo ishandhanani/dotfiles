@@ -5,6 +5,15 @@
 I work on **NVIDIA Dynamo** and **SGLang** - distributed inference serving infrastructure.
 - Languages: Rust, Python
 - Focus: High-performance inference, GPU workloads
+- Python tooling: **uv** for package management and virtual environments
+
+### Locations
+- Dynamo: `~/dynamo`
+- SGLang: `~/sglang`
+
+### Rebuilding
+- **Dynamo**: `cd lib/bindings/python && maturin develop --uv && cd ../../.. && uv pip install -e .`
+- **SGLang**: `uv pip install -e "python"`
 
 ## Code Philosophy
 

@@ -50,6 +50,8 @@ Create a structured debugging session for an issue.
    - Make minimal changes - fix the bug, don't refactor
 
 4. **Set context** for this session:
-   - Build command: `build` alias
+   - Ensure you're in a venv at project root (handled by uv)
+   - Rebuild Dynamo: `cd lib/bindings/python && maturin develop --uv && cd ../../.. && uv pip install -e .`
+   - Rebuild SGLang: `uv pip install -e "python"`
    - Test endpoints: localhost:8000/v1/models
    - Performance-critical code - avoid unnecessary changes
