@@ -1,309 +1,256 @@
-# CLAUDE.md - Dotfiles Reference
+# CLAUDE.md - Dotfiles Reference for AI Assistants
 
-This document provides a comprehensive reference for AI assistants working with this dotfiles repository.
+This document explains the Nix design decisions and agent-specific features in this dotfiles repository.
 
 ## Repository Overview
 
-**Type:** Personal dotfiles using Nix with Home Manager
-**Owner:** Ishan Dhanani
-**Purpose:** Cross-platform development environment configuration (macOS + Linux)
-**Total Nix Code:** ~700 lines
-**Structure:** Modular Home Manager flake-based configuration
+**Type:** Home Manager flake-based configuration  
+**Owner:** Ishan Dhanani  
+**Platforms:** macOS (aarch64-darwin), Linux (x86_64-linux, aarch64-linux)  
+**Design:** Single shared module set with platform conditionals
 
-## Quick Facts
+## Nix Design Decisions
 
-- **Package Manager:** Nix with Flakes enabled
-- **Configuration Manager:** Home Manager
-- **Platforms:** macOS (aarch64-darwin), Linux (x86_64-linux, aarch64-linux)
-- **Primary Shell:** Zsh with Bash fallback
-- **Editor:** Vim with minimal plugin set
-- **Prompt:** Starship (minimal, optimized configuration)
+### 1. Flake Structure: One Module Set, Multiple Configs
 
-## Repository Structure
+**Decision:** All 5 configurations (`home`, `work`, `brev-vm`, `simbox`, `brev-vm-arm`) share the same `home.nix` and module files.
 
-```
-dotfiles/
-├── home-manager/
-│   ├── flake.nix              # Main flake with 5 configurations
-│   ├── home.nix               # Core home-manager config (22 packages)
-│   ├── Makefile               # Management commands
-│   ├── modules/
-│   │   ├── vim.nix           # Vim with 4 plugins (ALE, auto-save, tabular, jellybeans)
-│   │   ├── git.nix           # Git config with delta, SSH signing
-│   │   ├── zsh.nix           # Zsh with starship, atuin, custom functions
-│   │   ├── bash.nix          # Bash (mirrors zsh config)
-│   │   ├── ssh.nix           # SSH config with auto-key-addition
-│   │   └── uvx.nix           # UV tool installer (llm, y-cli)
-│   └── functions/
-│       └── ai-functions.sh   # AI-powered git commands (lazy-loaded)
-└── README.md
+**Why:** 
+- Single source of truth for configuration
+- Changes propagate to all environments automatically
+- Platform differences handled via conditionals (`pkgs.stdenv.isDarwin`, `pkgs.stdenv.isLinux`)
+
+**Implementation:**
+```nix
+# flake.nix:28-40
+extraSpecialArgs = {
+  user = "ishandhanani";  # or "idhanani", "ubuntu", "ishan"
+  homeDirectory = "/Users/ishandhanani";  # or "/home/ubuntu", etc.
+};
 ```
 
-## Available Configurations
+User-specific values (username, home directory) are passed via `extraSpecialArgs`, allowing the same modules to work across different users/machines.
 
-1. **home** - Personal macOS (ishandhanani@aarch64-darwin)
-2. **work** - Work macOS (idhanani@aarch64-darwin)
-3. **brev-vm** - Linux VM (ubuntu@x86_64-linux)
-4. **simbox** - Linux box (ishan@x86_64-linux)
-5. **brev-vm-arm** - ARM Linux VM (ubuntu@aarch64-linux)
+### 2. Modular Architecture
 
-## Common Commands
+**Decision:** Each tool/service has its own module file in `modules/`.
 
-### Management (via Makefile in home-manager/)
+**Why:**
+- Clear separation of concerns
+- Easy to enable/disable entire features
+- Platform-specific logic isolated per module
 
-```bash
-make help           # Show all available commands
-make install        # Install Nix + enable flakes
-make home           # Apply personal macOS config
-make work           # Apply work macOS config
-make vm             # Apply Linux x86_64 config
-make vm-arm         # Apply Linux ARM config
-make update         # Update flake inputs
-make clean          # Garbage collection
-make backup         # Backup existing dotfiles
-make check          # Verify config builds
-make generations    # List home-manager generations
-make rollback       # Rollback to previous generation
-```
+**Modules:**
+- `vim.nix` - Editor configuration with ALE linting
+- `git.nix` - Git with SSH signing and delta
+- `zsh.nix` / `bash.nix` - Shell configs (mirror each other)
+- `ssh.nix` - SSH config with platform-specific key management
+- `uvx.nix` - UV tool installer with conditional installation
 
-### Quick Rebuild (from shell aliases)
+### 3. Platform Conditionals
 
-```bash
-edit-home          # Open home.nix in $EDITOR
-rebuild            # Alias for 'home-manager switch'
-```
+**Decision:** Use `lib.mkIf pkgs.stdenv.isDarwin` / `lib.mkIf pkgs.stdenv.isLinux` for platform-specific code.
 
-## Performance Optimizations Applied
+**Examples:**
 
-### 1. Vim/ALE Linting (vim.nix:22-23)
-**Optimization:** Reduced linting frequency to prevent lag while typing
-- Changed `ale_lint_on_text_changed` from `'always'` → `'normal'`
-- Added `ale_lint_delay = 300` (300ms debounce)
-- **Impact:** Smoother typing, especially in large Python files
+**SSH Key Management (ssh.nix:34-52):**
+- macOS: Uses `--apple-use-keychain` flag, checks keychain before adding
+- Linux: Uses `ssh-agent` service, checks agent before adding
+- Both: Only add if not already present (prevents redundant prompts)
 
-### 2. Shell Function Lazy Loading (zsh.nix:104-122, bash.nix:78-96)
-**Optimization:** AI functions (125 lines) now load on-demand instead of at shell startup
-- Created `_load_ai_functions()` wrapper with flag tracking
-- Functions load only when `gcai` or `gprai` are first used
-- **Impact:** 50-100ms faster shell startup
+**Font Configuration (home.nix:69):**
+- Linux: `fonts.fontconfig.enable = true` (needed for font rendering)
+- macOS: Not needed (handled by system)
 
-### 3. UV Tool Installation (uvx.nix:15-22)
-**Optimization:** Skip reinstalling tools if already present
-- Added `uv tool list` check before installation
-- Removed `--force` flag to prevent unnecessary reinstalls
-- **Impact:** Significantly faster `home-manager switch` (no network requests)
+**SSH Agent Service (ssh.nix:31):**
+- Linux: `services.ssh-agent.enable = true` (systemd service)
+- macOS: Not needed (uses keychain)
 
-### 4. SSH Key Auto-Addition (ssh.nix:34-52)
-**Optimization:** Only add keys if not already in agent
-- Added `ssh-add -l` check before adding keys
-- Prevents redundant keychain prompts on macOS
-- **Impact:** Faster activation, no unnecessary dialogs
+### 4. Activation Scripts
 
-### 5. Starship Prompt (zsh.nix:127-178, bash.nix:101-152)
-**Optimization:** Minimal module set to prevent timeout warnings
-- Only shows: directory, git branch, git status, python venv, prompt character
-- `command_timeout = 100` (ms) to prevent hangs
-- Disabled python version detection (no binary execution)
-- **Impact:** No more `[WARN] Executing command "/usr/bin/python3" timed out` messages
+**Decision:** Use `home.activation.*` for one-time setup tasks that run on `home-manager switch`.
 
-### 6. PATH Consolidation
-**Optimization:** Removed redundant PATH setup in shell init scripts
-- PATH now only set via `sessionPath` in home.nix
-- Removed duplicate exports from zsh.nix and bash.nix
-- **Impact:** Cleaner config, slightly faster shell init
+**Why:**
+- Runs before/after configuration changes
+- Can check state before acting (e.g., "is key already in agent?")
+- Platform-specific shell scripts
 
-## Installed Packages (22 total)
+**Current Activations:**
+- `sshAddKey` (macOS) - Adds SSH key to keychain if not present
+- `sshAddKeyLinux` (Linux) - Adds SSH key to agent if not present
+- `installUvTools` (uvx.nix) - Installs UV tools if not already installed
 
-**CLI Tools:** gh, curl, wget, git, ripgrep, jq, fd, fzf, yazi
-**Enhancements:** eza (ls), bat (cat), delta (git diff), zoxide (cd), zellij (tmux)
-**Development:** ruff (Python), yq (YAML), uv (Python pkg mgr), sccache (Rust cache)
-**Shell:** starship (prompt), atuin (history), gh-dash, gh-notify
+**Pattern:** Always check state first, then act conditionally. Prevents redundant operations and prompts.
 
-**UV Tools (lazy-installed):** llm, y-cli
+### 5. Lazy Loading for Performance
 
-## Shell Configuration Highlights
+**Decision:** AI functions (125 lines) are lazy-loaded instead of sourced at shell startup.
 
-### Zsh/Bash Aliases (34 total)
-
-**Git:**
-```bash
-ga='git add'         gc='git commit'      gps='git push'
-gs='git status'      gpl='git pull'       gf='git fetch'
-gcb='git checkout -b' gp='git push'       gll='git log --oneline'
-gd='git diff'        gco='git checkout'
-```
-
-**Tools:**
-```bash
-cat='bat --style=plain --paging=never'
-ls='eza --color=always --group-directories-first'
-ll='eza -la --color=always --group-directories-first'
-tree='eza --tree'
-```
-
-**Navigation:**
-```bash
-v='vim .'            c='cursor .'         m='make'
-d='docker'           dc='docker compose'  k='kubectl'
-godesk='cd ~/Desktop' gorepo='cd ~/Documents/repos'
-venv='source .venv/bin/activate'
-```
-
-**AI:**
-```bash
-ai='y-cli chat'      gcai='git_ai_commit' gprai='PR generator'
-```
-
-### Custom Functions
-
-**Yazi File Manager Integration:**
-```bash
-y()  # Launch yazi with CWD switching on exit
-```
-
-**AI-Powered Git (lazy-loaded):**
-```bash
-gcai    # Generate semantic commit messages with LLM
-gprai   # Generate PR titles and descriptions
-```
-
-## Vim Configuration
-
-**Editor:** Classic Vim (not Neovim)
-**Theme:** Jellybeans
-**Plugins:** 4 total
-- `ale` - Asynchronous Linting Engine (Python: ruff)
-- `vim-auto-save` - Auto-save on changes
-- `tabular` - Text alignment
-- `jellybeans-vim` - Color scheme
-
-**Key Bindings (ALE/LSP-style):**
-```vim
-gr  - ALEFindReferences
-gn  - ALERename
-gi  - ALEGoToImplementation
-gp  - ALEHover
-gm  - ALENext (next error)
-```
-
-## Git Configuration
-
-**Signing:** SSH-based commit signing using Ed25519 key
-**Diff Tool:** Delta with side-by-side view
-**URL Rewriting:** HTTPS → SSH for GitHub
-**SSH Key:** `~/.ssh/id_ed25519` (auto-added to agent)
-
-## SSH Configuration
-
-**Key Type:** Ed25519
-**macOS:** UseKeychain enabled, auto-addition on first use
-**Linux:** ssh-agent service enabled
-**Includes:** `~/.ssh/config.local`, `~/.brev/ssh_config`
-
-## Troubleshooting Tips
-
-### Slow Shell Startup
-```bash
-# Profile zsh startup
-zmodload zsh/zprof
-# (restart shell)
-zprof
-
-# Check atuin database size
-du -sh ~/.local/share/atuin/
-```
-
-### Slow Vim Editing
-- Check ALE settings in vim.nix:22-27
-- Current config already optimized (lint_delay=300ms, text_changed='normal')
-
-### Starship Timeout Warnings
-- Already fixed: only essential modules enabled, timeout=100ms
-- Python version detection disabled to prevent `/usr/bin/python3` hangs
-
-### Home Manager Switch Taking Long
-- Run `make clean` to garbage collect old generations
-- UV tools now check before reinstalling (optimized)
-- SSH keys now check before re-adding (optimized)
-
-### Failed to Load AI Functions
-- Functions are lazy-loaded - first use of `gcai`/`gprai` will load them
-- Check `functions/ai-functions.sh` exists
-- Requires `llm` and `y-cli` from UV tools
-
-## Platform-Specific Notes
-
-### macOS
-- Uses Apple Keychain for SSH key storage
-- `UseKeychain yes` in SSH config
-- Platform detection via `pkgs.stdenv.isDarwin`
-
-### Linux
-- ssh-agent service enabled automatically
-- Font config enabled (`fonts.fontconfig.enable`)
-- Platform detection via `pkgs.stdenv.isLinux`
-
-## Key Files to Remember
-
-- **flake.nix:28-41** - User/home directory mappings for each config
-- **home.nix:23-26** - Global sessionPath additions
-- **vim.nix:22-27** - ALE linting performance settings
-- **zsh.nix:104-122** - Lazy-loading function wrapper
-- **uvx.nix:15-22** - Conditional UV tool installation
-- **ssh.nix:34-52** - Conditional SSH key addition
-
-## Configuration Philosophy
-
-This dotfiles repo follows these principles:
-1. **Minimal:** Only 22 packages, 4 vim plugins, essential tools only
-2. **Fast:** Multiple optimizations to prevent startup lag
-3. **Cross-platform:** Same config works on macOS and Linux with conditionals
-4. **Modular:** Each tool has its own module file
-5. **Declarative:** Everything managed by Nix, reproducible across machines
-
-## Recent Changes (Latest Session)
-
-**Performance Optimizations Applied:**
-- Vim ALE: Reduced linting frequency + added debounce
-- Shell: Lazy-load AI functions instead of sourcing on startup
-- UV: Skip tool installation if already present
-- SSH: Skip key addition if already in agent
-- Starship: Minimal module set, fast timeout, no Python execution
-- PATH: Consolidated to single location
-
-**Expected Impact:**
+**Why:**
 - Faster shell startup (50-100ms improvement)
-- Smoother vim editing (no lag while typing)
-- Faster `home-manager switch` (no unnecessary reinstalls)
-- No more starship timeout warnings
+- Functions only load when first used
+- Reduces initial shell memory footprint
 
-## Emergency Recovery
+**Implementation (zsh.nix:102-119):**
+```nix
+_load_ai_functions() {
+  if [ "$_ai_functions_loaded" -eq 0 ]; then
+    source ${../functions/ai-functions.sh}
+    _ai_functions_loaded=1
+  fi
+}
 
-```bash
-# Rollback to previous generation
-make rollback
-
-# Or manually
-home-manager generations
-/nix/store/...-home-manager-generation/activate
-
-# Restore from backup (created automatically by Makefile)
-ls ~/.dotfiles-backup-*
-cp ~/.dotfiles-backup-*/.<file> ~/
+gcai() {
+  _load_ai_functions
+  git_ai_commit "$@"
+}
 ```
 
-## External Dependencies
+Wrappers check a flag, source the functions once, then delegate to the real function.
 
-**Required:**
-- Nix package manager with flakes enabled
-- Git (for flake inputs)
+### 6. Conditional Tool Installation
 
-**Optional:**
-- GPG key for additional git signing
-- `~/.zshrc.local` / `~/.bashrc.local` for machine-specific overrides
-- `~/.local/bin/env` for additional environment variables
-- `~/.cargo/env` for Rust toolchain
+**Decision:** UV tools check if already installed before attempting installation.
+
+**Why:**
+- Faster `home-manager switch` (no network requests if already present)
+- Prevents unnecessary reinstalls
+- Reduces activation time
+
+**Implementation (uvx.nix:15-22):**
+```nix
+home.activation.installUvTools = ''
+  if ! uv tool list | grep -q "y-cli"; then
+    uv tool install y-cli
+  fi
+  # ... similar check for llm
+'';
+```
+
+### 7. PATH Consolidation
+
+**Decision:** PATH additions only in `home.nix` via `sessionPath`, not in shell init scripts.
+
+**Why:**
+- Single source of truth
+- Works across all shells (zsh, bash)
+- Cleaner module separation
+
+**Implementation (home.nix:23-26):**
+```nix
+sessionPath = [
+  "$HOME/.local/bin"
+  "$HOME/go/bin"
+];
+```
+
+## Agent-Specific Features
+
+### AI-Powered Git Functions
+
+**Location:** `functions/ai-functions.sh` (lazy-loaded via zsh.nix)
+
+**Functions:**
+
+1. **`gcai` (git_ai_commit)**
+   - Generates semantic commit messages for staged changes
+   - Uses `llm` CLI tool with Claude 4o model
+   - Format: `type(scope): description`
+   - Commits immediately after generation
+
+2. **`gprai` (PR generator)**
+   - Generates PR title and description from branch diff
+   - Compares current branch against `origin/main` or `origin/master`
+   - Uses `llm` CLI tool with Claude 4o model
+   - Optional: Creates PR via `gh` CLI if confirmed
+
+**Dependencies:**
+- `llm` - Installed via UV tools (uvx.nix)
+- `gh` - Installed as Nix package (home.nix)
+
+**Lazy Loading:**
+- Functions defined in separate shell script (complex syntax)
+- Wrapped in zsh.nix with lazy-loading pattern
+- First use triggers source, subsequent uses are direct
+
+**Usage:**
+```bash
+git add .
+gcai          # Generates and commits with AI message
+
+gprai         # Generates PR title/description, optionally creates PR
+```
+
+### UV Tools Integration
+
+**Location:** `modules/uvx.nix`
+
+**Purpose:** Installs Python CLI tools via `uv tool install` (not Nix packages).
+
+**Why UV tools instead of Nix:**
+- Tools update independently of Nix
+- Faster iteration for development tools
+- Some tools aren't in nixpkgs
+
+**Tools Installed:**
+- `llm` - Simon Willison's LLM CLI (used by AI functions)
+- `y-cli` - Y CLI tool
+
+**Design:** Conditional installation prevents reinstalls on every `home-manager switch`.
+
+## Key Files Reference
+
+**Core Configuration:**
+- `flake.nix` - Flake definition, 5 homeConfigurations sharing modules
+- `home.nix` - Main config, imports all modules, defines packages
+
+**Modules:**
+- `modules/ssh.nix` - SSH config with platform-specific key management
+- `modules/zsh.nix` - Zsh with lazy-loaded AI functions
+- `modules/uvx.nix` - UV tool installer with conditional checks
+- `modules/vim.nix` - Vim with ALE linting (optimized debounce)
+- `modules/git.nix` - Git with SSH signing
+
+**Agent Functions:**
+- `functions/ai-functions.sh` - AI-powered git commands (lazy-loaded)
+
+## Platform Detection Pattern
+
+Throughout the config, platform detection follows this pattern:
+
+```nix
+let
+  isDarwin = pkgs.stdenv.isDarwin;
+  isLinux = pkgs.stdenv.isLinux;
+in
+{
+  # Conditional feature
+  someFeature.enable = isDarwin;
+  
+  # Conditional activation script
+  home.activation.someScript = lib.mkIf isDarwin ''
+    # macOS-specific code
+  '';
+  
+  # Conditional config value
+  someConfig = lib.optionalString isDarwin "macOS value";
+}
+```
+
+This allows the same module to work on both platforms with appropriate differences.
+
+## Performance Optimizations
+
+**Applied optimizations (design decisions, not hacks):**
+
+1. **Vim ALE:** Reduced lint frequency (`lint_on_text_changed = 'normal'`, `lint_delay = 300ms`)
+2. **Shell startup:** Lazy-load AI functions (50-100ms faster)
+3. **Activation scripts:** Check state before acting (prevents redundant operations)
+4. **Starship:** Minimal module set, fast timeout (100ms), no Python execution
+5. **PATH:** Single source of truth (cleaner, faster)
+
+These are architectural decisions to keep the config fast and responsive, not workarounds.
 
 ---
 
-**Last Updated:** 2026-01-19 (Performance optimization session)
+**Last Updated:** 2026-01-19
