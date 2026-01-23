@@ -7,7 +7,17 @@ in
   programs.zsh = {
     enable = true;
     enableCompletion = true;
-    
+
+    # Use cached compinit - only regenerate once per day
+    completionInit = ''
+      autoload -Uz compinit
+      if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+        compinit
+      else
+        compinit -C
+      fi
+    '';
+
     # Basic history configuration  
     history = {
       size = 10000;

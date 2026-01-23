@@ -17,6 +17,11 @@
       set number
       syntax on
       colorscheme jellybeans
+
+      " Limit viminfo to prevent slow startup
+      " '10 = marks for 10 files, <50 = 50 lines per register, s10 = 10kb max item size
+      " h = don't restore hlsearch, n = viminfo file location
+      set viminfo='10,<50,s10,h
       
       " ALE - Optimized for performance
       let g:ale_lint_on_text_changed = 'normal'  " Only lint in normal mode, not while typing

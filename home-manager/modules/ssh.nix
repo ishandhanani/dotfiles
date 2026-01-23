@@ -3,6 +3,10 @@
 {
   programs.ssh = {
     enable = true;
+    includes = [
+      "~/.ssh/config.local"
+      "~/.brev/ssh_config"
+    ];
     matchBlocks = {
       "github.com" = {
         hostname = "github.com";
@@ -22,8 +26,6 @@
         PasswordAuthentication no
         ServerAliveInterval 60
         ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
-      Include ~/.ssh/config.local
-      Include ~/.brev/ssh_config
     '';
   };
 
