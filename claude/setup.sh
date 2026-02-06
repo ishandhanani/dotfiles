@@ -45,15 +45,63 @@ echo "-------------------------"
 create_link "$SCRIPT_DIR/user/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 
 echo ""
+echo "Setting up personal skills..."
+echo "------------------------------"
+SKILLS_SRC="$SCRIPT_DIR/user/skills"
+SKILLS_DEST="$CLAUDE_DIR/skills"
+mkdir -p "$SKILLS_DEST"
+
+if [[ -d "$SKILLS_SRC" ]]; then
+    for skill_dir in "$SKILLS_SRC"/*/; do
+        if [[ -d "$skill_dir" ]]; then
+            skill_name="$(basename "$skill_dir")"
+            create_link "$skill_dir" "$SKILLS_DEST/$skill_name"
+        fi
+    done
+else
+    echo "No skills directory found at $SKILLS_SRC"
+fi
+
+echo ""
 echo "Setup complete!"
 echo ""
 echo "User config installed:"
 echo "  ~/.claude/CLAUDE.md"
 echo ""
-echo "To install team plugin, run in Claude Code:"
-echo "  /plugin marketplace add https://github.com/ishandhanani/dynamo-claude-plugin"
-echo "  /plugin install dynamo@dynamo-dev"
+echo "Skills installed:"
+if [[ -d "$SKILLS_DEST" ]]; then
+    for link in "$SKILLS_DEST"/*/; do
+        if [[ -d "$link" ]]; then
+            echo "  ~/.claude/skills/$(basename "$link")"
+        fi
+    done
+fi
 echo ""
+echo "Plugin setup"
+echo "------------"
+echo "The following plugins need to be installed inside Claude Code (interactive commands)."
+echo ""
+
+read -p "Install dynamo-claude-plugin globally? (y/n) " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "  Run these in Claude Code:"
+    echo "    /plugin marketplace add https://github.com/ishandhanani/dynamo-claude-plugin"
+    echo "    /plugin install dynamo@dynamo-dev"
+    echo ""
+fi
+
+read -p "Install last30days-skill? (y/n) " -n 1 -r
+echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "  Run these in Claude Code:"
+    echo "    /plugin marketplace add https://github.com/mvanhorn/last30days-skill"
+    echo "    /plugin install last30days@last30days-skill"
+    echo ""
+fi
+
 if [[ -d "$BACKUP_DIR" ]]; then
     echo "Previous config backed up to: $BACKUP_DIR"
 fi

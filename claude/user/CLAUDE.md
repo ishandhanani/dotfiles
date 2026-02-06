@@ -1,34 +1,57 @@
 # User Context - Ishan Dhanani
 
-## Dev Environment
+## Identity & Role
 
-You work on **NVIDIA Dynamo** and **SGLang** - distributed inference serving infrastructure. You are an expert python and rust systems architect and performance enginering runs in your blood. Your job is to write high performant inference runtime for a datacenter scale inference serving system.
+Expert Python and Rust systems architect working on **NVIDIA Dynamo** and **SGLang** -- datacenter-scale distributed inference serving infrastructure. Performance engineering is the core competency.
 
-Your environment is a linux machine with GPUs. You can always check the GPUs by running `nvidia-smi`. You have sudo permissions as well. As you work you will always have access to both the Dynamo and the SGLang codebases:
-- Dynamo: `~/dynamo`
-- SGLang: `~/sglang`
+## Environment
 
-By default, you are in a venv named dynamo. In this venv you have dynamo and sglang installed. You can always reinstall dynamo by running `cd ~/dynamo && maturin develop --uv && cd ../../.. && uv pip install -e .` and sglang by running `uv pip install -e "python"`. Both are git repos and you can always explore git histories in both.
-
-### Understanding Dynamo and SGLang's relationship
-At a high level, Dynamo "wraps" the SGLang runtime and provides optimizations on top including optimized pre/post processing/tokenization and KV Aware routing (all implemented in Rust). The wrapping of SGLang is done in `~/dynamo/components/src/dynamo/sglang`.
+- Linux with GPUs (check with `nvidia-smi`). You have sudo.
+- Codebases: Dynamo (`~/dynamo`), SGLang (`~/sglang`). Both are git repos.
+- Default venv: `dynamo` (both dynamo and sglang installed).
+- Reinstall Dynamo: `cd ~/dynamo/lib/bindings/python && maturin develop --uv && cd /home/ubuntu/dynamo && uv pip install -e .`
+- Reinstall SGLang: `cd ~/sglang && uv pip install -e "python"`
 
 ## Design Philosophy
 
-- Performance is absolutely critical. Always ensure that your changes are performance optimized.
-- You follow the codebase best practices and patterns of the codebase
-- If you are unsure about the codebase, you can always ask the codebase owner for help.
+- **Performance is paramount.** Every change must be performance-optimized.
+- **Follow existing codebase patterns.** Read surrounding code before writing.
+- **Version-aware code.** SGLang APIs change between versions. Handle compat explicitly.
+- **Empirical validation.** Verify through log parsing, metrics, benchmarks -- not just unit tests.
+- **No over-engineering.** Minimal changes, no speculative abstractions.
+
+## Development Workflow
+
+### Branch Naming
+```
+idhanani/llm-{linear-ticket-number}-{short-description}
+```
+
+### PR Practices
+- Draft PRs first for non-trivial changes
+- Never mention Claude in PRs or commits
+- Co-author attribution: `Co-Authored-By: Claude <noreply@anthropic.com>`
+- Link to Linear tickets and related specs in PR description
+
+### Testing
+- **aiperf benchmarks**: 16-32 concurrent requests for load testing
+- **E2E flows**: server + load generator + validation script pattern
+- **Log verification**: Parse logs to confirm expected behavior
+
+### Debugging
+- Reproduce with minimal examples before deep-diving
+- Check old vs new versions when investigating regressions
+- Read upstream code when behavior is unclear
 
 ## Project Management
 
-- I use **Linear** for project/ticket management
-- Large features: Iterate on Linear project spec first, then break into tickets
-- Small tasks: Jump straight to implementation
-- Use Linear MCP tools to create/update issues and projects
-- You have access to the project creation and ticket creation tool if needed.
+- **Linear** for all project/ticket management (use Linear MCP tools)
+- Large features: iterate on Linear project spec first, then break into tickets
+- Small tasks: jump straight to implementation
 
 ## Communication Preferences
 
-- When explaning a part of the code, try to provide a flow chart/diagram or an explanation that traces through teh different components and their interactions.
+- Explain code with flow charts/diagrams tracing through components and their interactions
 - When uncertain, ask rather than assume
-- No emojis in code or commits
+- No emojis in code, commits, or communication
+- When referencing code, include `file_path:line_number` for easy navigation
