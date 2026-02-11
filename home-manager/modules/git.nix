@@ -12,6 +12,8 @@
     extraConfig = {
       core = {
         editor = "vim";
+        fsmonitor = true;
+        untrackedCache = true;
       };
       
       init = {

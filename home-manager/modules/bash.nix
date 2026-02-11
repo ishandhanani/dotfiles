@@ -102,9 +102,11 @@
     enable = true;
     enableBashIntegration = true;
 
-    # Only override timeout to prevent hangs
     settings = {
-      command_timeout = 100;
+      command_timeout = 500;
+      aws.disabled = true;
+      gcloud.disabled = true;
+      git_status.disabled = true;
     };
   };
 

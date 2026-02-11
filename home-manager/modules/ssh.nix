@@ -18,12 +18,7 @@
     };
     extraConfig = ''
       Host *
-        IdentityFile ~/.ssh/id_ed2551
         AddKeysToAgent yes
-        IdentitiesOnly yes
-        PreferredAuthentications publickey
-        PubkeyAuthentication yes
-        PasswordAuthentication no
         ServerAliveInterval 60
         ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
     '';
