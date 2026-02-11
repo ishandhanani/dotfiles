@@ -34,6 +34,7 @@ in
     ./modules/uvx.nix
     ./modules/bash.nix
     ./modules/ssh.nix
+    ./modules/neovim.nix
   ];
   
   # Unified packages with platform-specific additions
