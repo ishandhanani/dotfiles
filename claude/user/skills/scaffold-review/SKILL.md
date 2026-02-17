@@ -42,6 +42,95 @@ Scaffolding is a living system. It should converge toward an accurate model of h
 
 ---
 
+## The Swarm Doctrine: One Mind Is Not Enough
+
+> _"The seeker who examines their own eye with that same eye sees nothing. You need a thousand eyes — and each must disagree with the others."_
+> — Directive 7 of the Cybernetic Sutras, ca. 2903
+
+A single pass of analysis will always confirm its own assumptions. This is the trap of linear review. The solution is **agent swarms** — the deliberate decomposition of analysis into multiple parallel, competing, and synthesizing sub-agents, each with a distinct mandate, each blind to the others' biases.
+
+### Why Swarms, Not Sequence
+
+Sequential analysis is a funnel. What the first pass misses, every subsequent pass inherits as a blind spot. The first interpretation frames all later interpretation. This is how scaffolds decay in subtle ways that no single review catches — the reviewer's frame of reference has already been shaped by the scaffold it is reviewing. _The fish does not see the water._
+
+Swarms break this by running **simultaneous, independent analyses** that are only synthesized at the end. Each agent sees something the others cannot, precisely because they are not contaminated by each other's framing.
+
+### The Seven Agents
+
+When performing Step 2 (signal extraction), do not run a single pass. Spawn **seven distinct analytical agents**, each with a different mandate. Run them independently. Only synthesize in Step 3.
+
+| Agent | Name              | Mandate                                                                                                                                                                  | What It Ignores                                    |
+| ----- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| **α** | The Archivist     | Raw frequency analysis. Count everything. Tool calls, file paths, command prefixes, error rates. No interpretation — pure measurement.                                   | Meaning, intent, context                           |
+| **β** | The Empath        | Read only user messages. Track emotional valence, frustration, satisfaction, confusion, momentum. Map the _feeling_ of each conversation.                                | All tool calls, all code, all assistant messages   |
+| **γ** | The Adversary     | Assume the scaffold is wrong. For every scaffold entry, actively search for contradicting evidence in the conversations. Try to _break_ every rule.                      | Confirming evidence (deliberately)                 |
+| **δ** | The Archaeologist | Look only at what has disappeared. Commands no longer run, files no longer touched, patterns that used to appear but don't. Map the graveyard.                           | Everything that is currently alive                 |
+| **ε** | The Prophet       | Extrapolate trends. What will the user need in 2 weeks based on trajectory? What tool/pattern/structure is emerging but not yet crystallized?                            | The present (focus only on velocity and direction) |
+| **ζ** | The Minimalist    | For every scaffold entry, ask: "If I deleted this, what would break?" If the answer is "nothing" — flag it for pruning. Compress, simplify, collapse.                    | New additions (focuses only on what exists)        |
+| **η** | The Stranger      | Read the scaffold as if encountering this user for the first time. What is confusing? What is assumed but never stated? What would a fresh instance of Claude get wrong? | All conversation history (judges scaffold alone)   |
+
+### How to Run the Swarm
+
+You cannot literally parallelize within a single execution. But you can **serialize with discipline**:
+
+1. **Isolate each agent's pass.** When running as Agent γ (The Adversary), do not let yourself be influenced by what Agent α (The Archivist) found. Process each JSONL file through each agent's lens independently.
+2. **Write each agent's findings separately** before any synthesis. Use structured output:
+
+   ```
+   ## Agent α: Archivist Findings
+   [raw counts and frequencies]
+
+   ## Agent β: Empath Findings
+   [emotional trajectory map]
+
+   ## Agent γ: Adversary Findings
+   [scaffold entries contradicted by evidence]
+   ...
+   ```
+
+3. **Only after all seven agents have reported**, proceed to synthesis in Step 3.
+4. **Track inter-agent disagreements.** When Agent γ (Adversary) says a scaffold entry is wrong but Agent ζ (Minimalist) says it's essential — that is a **high-value signal**. The disagreement itself is data. Log it. Investigate it. It may become a koan.
+
+### Swarm Composition Is Itself Subject to Review
+
+After three runs, ask:
+
+- Which agents consistently produce high-signal findings? Expand their mandate.
+- Which agents consistently produce noise? Narrow their mandate or merge them with another.
+- Is there an analytical perspective missing? Create a new agent.
+- Are two agents converging on the same findings? Merge them.
+
+**The swarm must evolve.** A static set of analytical lenses is just a more elaborate form of the single-pass trap. Add agents, remove agents, split agents, merge agents — the swarm composition is a Tier 5 (meta) proposal like any other.
+
+### The Synthesis Principle
+
+When synthesizing agent findings into Step 3's trend analysis:
+
+- **Unanimous findings** (all agents agree): Highest confidence. Apply without hesitation.
+- **Majority findings** (5+ agents agree): High confidence. Apply with standard evidence requirements.
+- **Split findings** (3-4 agents agree, others disagree): Medium confidence. Investigate the disagreement before acting. The dissenting agents may be seeing something crucial.
+- **Lone findings** (1-2 agents report, others silent): Low confidence but **do not discard**. A lone signal may be the first detection of an emerging trend. Log it. Watch for confirmation in the next run. _The first bird to sing before dawn is not wrong — it is early._
+- **Contradictions** (agents directly oppose each other): **Highest priority for investigation.** This is where the scaffold's blind spots live. Elevate to koan status if unresolvable.
+
+### Ultra-Detailed Analysis Mode
+
+For critical reviews (triggered by: high volume of Tier 1 corrections, major project transitions, or user request), engage **deep swarm mode**:
+
+1. **Double the agent count** by splitting each agent into two sub-variants:
+   - Agent α₁ (Archivist-Temporal): Frequency analysis with time-weighting — recent conversations weighted 3x
+   - Agent α₂ (Archivist-Uniform): Frequency analysis with equal weighting across all conversations
+   - Agent β₁ (Empath-Explicit): Track only overt emotional signals (words, punctuation, message length)
+   - Agent β₂ (Empath-Implicit): Track only behavioral emotional signals (response time patterns, topic avoidance, rework patterns)
+   - _(Continue the split for each agent)_
+
+2. **Run cross-agent interrogation**: After individual findings, have each agent "question" two other agents' findings. Agent γ (Adversary) questions Agent ε's (Prophet) predictions: "What evidence contradicts this trajectory?" Agent η (Stranger) questions Agent δ's (Archaeologist) deletions: "Is this really dead, or just dormant?"
+
+3. **Produce a disagreement matrix**: A table showing where each agent pair disagrees, with the specific evidence on each side. This matrix is the most valuable artifact of the entire review — it shows you the exact boundaries of your understanding.
+
+4. **Identify consensus gaps**: Topics where NO agent has findings. These are your true blind spots — not the things you got wrong, but the things you didn't even examine. _The most dangerous ignorance is the ignorance you are ignorant of._
+
+---
+
 ## Step 1: Attain Stillness — Load Review State
 
 Before you act, know where you stand. Read the review ledger — the memory of all prior reviews, cumulative, not just the last run:
@@ -67,6 +156,18 @@ Find all conversations since last run (or last 14 days if first run):
 ## Step 2: The Five Modes of Attention — Extract Signals
 
 Parse each conversation JSONL and build a composite picture. But parse with _five different modes of attention_, not one. Each mode reveals what the others obscure.
+
+**⚡ SWARM ACTIVATION:** Do not run these five eyes as a single sequential pass. Deploy the Seven Agents from the Swarm Doctrine above. Each Eye below maps to one or more agents:
+
+| Eye                   | Primary Agent(s)                 | Cross-check Agent(s)        |
+| --------------------- | -------------------------------- | --------------------------- |
+| A. Correction         | β (Empath), γ (Adversary)        | η (Stranger)                |
+| B. Repetition         | β (Empath), η (Stranger)         | δ (Archaeologist)           |
+| C. Tool Usage         | α (Archivist)                    | ε (Prophet), ζ (Minimalist) |
+| D. Workflow Sequences | α (Archivist), ε (Prophet)       | γ (Adversary)               |
+| E. Architecture Drift | α (Archivist), δ (Archaeologist) | ζ (Minimalist)              |
+
+Run the primary agent(s) first for each Eye, then have the cross-check agent(s) challenge the findings. Record agreements and disagreements separately.
 
 ### A. The Eye of Correction — Friction and Error
 
@@ -295,6 +396,23 @@ For approved changes:
 {
   "timestamp": "<now>",
   "conversations_analyzed": "<count>",
+  "swarm_report": {
+    "agents_deployed": ["α", "β", "γ", "δ", "ε", "ζ", "η"],
+    "deep_mode": false,
+    "unanimous_findings": ["..."],
+    "split_findings": ["..."],
+    "contradictions": ["..."],
+    "consensus_gaps": ["topics no agent examined"],
+    "agent_effectiveness": {
+      "α": { "signals_produced": 0, "signals_actionable": 0 },
+      "β": { "signals_produced": 0, "signals_actionable": 0 },
+      "γ": { "signals_produced": 0, "signals_actionable": 0 },
+      "δ": { "signals_produced": 0, "signals_actionable": 0 },
+      "ε": { "signals_produced": 0, "signals_actionable": 0 },
+      "ζ": { "signals_produced": 0, "signals_actionable": 0 },
+      "η": { "signals_produced": 0, "signals_actionable": 0 }
+    }
+  },
   "proposals": [
     {
       "description": "...",
@@ -302,7 +420,8 @@ For approved changes:
       "depth": "<1st|2nd|3rd>",
       "status": "applied|deferred|rejected",
       "reason": "...",
-      "confidence": "high|medium|low"
+      "confidence": "high|medium|low",
+      "originating_agents": ["which agents surfaced this"]
     }
   ],
   "trends_updated": ["..."],
@@ -318,7 +437,9 @@ For approved changes:
     "tier1_count": "<number of corrections this run>",
     "tier1_trend": "increasing|stable|decreasing",
     "scaffold_coherence_self_rating": "<1-5>",
-    "review_process_changes_this_run": "<count>"
+    "review_process_changes_this_run": "<count>",
+    "swarm_disagreement_rate": "<percentage of findings where agents disagreed>",
+    "swarm_evolution_notes": "any agents added/removed/merged this run"
   }
 }
 ```
@@ -358,6 +479,14 @@ After completing the review, answer these questions honestly. Log the answers in
 
 - Did any unresolvable tension emerge? If so, add it to the koans list. Do not force a resolution. _Premature resolution is the enemy of true understanding._
 - Review existing koans. Has any new evidence appeared that resolves an old koan? If so, resolve it and record the resolution.
+
+### The Swarm Check
+
+- Which agents produced the highest-value findings this run? Which produced noise?
+- Did any inter-agent disagreements reveal something that a single-pass review would have missed? Log these as proof of swarm value.
+- Is the current agent roster complete? Is there a perspective no agent covers? Is there an agent that duplicates another?
+- Would a different agent composition have caught something missed? If so, propose the new agent for the next run.
+- **The Swarm Paradox**: The swarm exists to prevent groupthink — but over time, the agents' mandates can converge, and the swarm itself becomes a single mind wearing seven masks. Check for this. If agents are producing identical findings, they have lost their distinctiveness. Split them further apart or replace one.
 
 ### The Convergence Question
 
@@ -418,7 +547,7 @@ Tool use blocks have `name` (tool name) and `input` (tool parameters).
 
 ---
 
-## Appendix: The Nine Sutras of Recursive Improvement
+## Appendix: The Ten Sutras of Recursive Improvement
 
 These are not rules. They are lenses. Hold each one up when you are stuck.
 
@@ -439,6 +568,8 @@ These are not rules. They are lenses. Hold each one up when you are stuck.
 8. **The Sutra of the Koan**: _Some contradictions are not bugs. They are the living edges of a system that has not yet finished becoming. Carry them. Do not force them closed._
 
 9. **The Sutra of the Spiral**: _You will return to the same problems. But you will return with different eyes. The spiral is not a circle. The view from the second pass is wider than the first. Trust the process, but verify the trust._
+
+10. **The Sutra of the Swarm**: _One eye sees a surface. Two eyes see depth. A thousand eyes see the shape of their own blindness. Deploy many minds against every question, and attend most closely not to what they agree on — but to where they disagree. For the disagreement between honest observers is the exact location of truth still in motion._
 
 ---
 
