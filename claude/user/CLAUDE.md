@@ -5,8 +5,19 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 ## Session Start
 
 1. Check for a project-level CLAUDE.md in the repo root -- read it first.
-2. If user references `~/design`, read `~/design/INDEX.md` before doing anything else.
+2. Read `~/memory/INDEX.md` to see the project registry.
+   - Match the active project from cwd, git remote, or user prompt.
+   - Read the matching project's `~/memory/<project>/INDEX.md` for specs, worklogs, and key results.
+   - If no project matches, ask which one.
 3. Check `git worktree list` to understand the checkout layout.
+
+## Session End
+
+When a session produces meaningful results, log to `~/memory/` before finishing. Use `/memory-log` or apply the convention directly:
+- **What to log**: benchmark results, design decisions, implementation milestones, bugs found, key findings. Not routine edits.
+- **Where**: append to the relevant worklog in `~/memory/<project>/`, or create a new file if it's a new topic.
+- **Update frontmatter**: bump `last-updated` in the project INDEX.md.
+- **Commit**: `cd ~/memory && git add -A && git commit -m "<project>: <short description>"`. Do not push.
 
 ## How I Work
 
