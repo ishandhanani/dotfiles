@@ -1,6 +1,6 @@
 ---
 name: server-lifecycle
-description: Launch SGLang server, run benchmarks, and clean up. Handles the full lifecycle of server + load generator + results collection.
+description: Launch an inference server, run benchmarks, and clean up. Handles the full lifecycle of server + load generator + results collection.
 user-invocable: true
 ---
 
@@ -8,12 +8,15 @@ user-invocable: true
 
 Manages the full cycle: kill stale -> launch -> health check -> benchmark -> collect results -> kill.
 
+Works with any inference server (SGLang, vLLM, TRT-LLM, etc.). Project-specific args come from the project's CLAUDE.md or `~/memory/<project>/INDEX.md`.
+
 ## Step 1: Clean Environment
 
 Kill any stale processes from previous runs:
 
 ```bash
 pkill -9 -f sglang 2>/dev/null
+pkill -9 -f vllm 2>/dev/null
 pkill -9 -f aiperf 2>/dev/null
 sleep 3
 nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
@@ -26,91 +29,61 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader
 
 ## Step 2: Launch Server
 
-Determine which project/venv to use:
-1. Check if user specified a project context
-2. Default to `~/sglang-poc-pin` if it exists
-3. Read the project's CLAUDE.md for standard launch args
+Determine project context:
+1. Check user prompt or cwd for project identity
+2. Read the project's CLAUDE.md and `~/memory/<project>/INDEX.md` for launch args
+3. Activate the project's venv
 
-Standard PIN dev launch:
-```bash
-source ~/sglang-poc-pin/.venv/bin/activate
-
-CUDA_VISIBLE_DEVICES=0,1 python -m sglang.launch_server \
-  --model-path Qwen/Qwen3-14B-FP8 \
-  --port 30000 \
-  --mem-fraction-static 0.50 \
-  --tp-size 2 \
-  --enable-hierarchical-cache \
-  --hicache-ratio 2.0 \
-  --hicache-write-policy write_through \
-  --trust-remote-code \
-  --log-level info \
-  --watchdog-timeout 120000 \
-  --enable-metrics \
-  --enable-cache-report \
-  --context-length 32768
-```
-
-Run as background task. Poll for health:
+Launch as background task. Poll for health:
 ```bash
 for i in $(seq 1 60); do
-  curl -s localhost:30000/health 2>/dev/null && echo " Server ready" && break
+  curl -s localhost:${PORT}/health 2>/dev/null && echo " Server ready" && break
   sleep 5
 done
 ```
 
+If no health endpoint, fall back to checking `/v1/models` or process status.
+
 ## Step 3: Run Benchmark
 
 Use the appropriate benchmark script or aiperf command. Always:
-- Run **baseline first**, then **treatment** (e.g., pinned)
+- Run **baseline first**, then **treatment**
 - If results matter, run **both orderings** (A/B then B/A) to control for ordering bias
 - Use a **fresh server** for each phase (kill + relaunch between phases)
-- Save results to `~/memory/agentic-cache-control/benchmarks/results/`
+- Save results to `~/memory/<project>/benchmarks/results/` (or wherever the project INDEX.md specifies)
 
 Example with aiperf:
 ```bash
 cd ~/aiperf
-uv run aiperf profile Qwen/Qwen3-14B-FP8 \
-  --url http://localhost:30000 \
+uv run aiperf profile <model> \
+  --url http://localhost:${PORT} \
   --endpoint-type chat \
-  --input-file ~/datasets/long_multiturn_opus.jsonl \
+  --input-file <dataset> \
   --custom-dataset-type multi-turn \
   --concurrency 16 \
   --streaming \
   --request-timeout-seconds 300 \
-  --artifact-dir ~/memory/agentic-cache-control/benchmarks/results/
-```
-
-Example with benchmark script:
-```bash
-source ~/sglang-poc-pin/.venv/bin/activate
-python ~/memory/agentic-cache-control/benchmarks/pin_benchmark_v8.py \
-  --depths 10 \
-  --phase baseline \
-  --output-dir /tmp/benchmark_results
+  --artifact-dir ~/memory/<project>/benchmarks/results/
 ```
 
 ## Step 4: Collect and Verify
 
 ```bash
-# Check metrics during run
-curl -s localhost:30000/metrics | grep -E 'hicache|cache_hit|evicted|num_requests' | grep -v '^#'
-
-# Copy results
-cp /tmp/benchmark_results/results.json ~/memory/agentic-cache-control/benchmarks/results/
-
-# Check PIN-specific logs if relevant
-grep '\[PIN\]' /tmp/sglang_server_*.log | tail -20
+# Check metrics during run (adjust grep patterns per server)
+curl -s localhost:${PORT}/metrics | grep -E 'cache|hit|evict|request' | grep -v '^#'
 ```
+
+After collecting results, invoke `/memory-log` to record findings.
 
 ## Step 5: Cleanup
 
 Always kill server after benchmarks:
 ```bash
 pkill -9 -f sglang 2>/dev/null
+pkill -9 -f vllm 2>/dev/null
 pkill -9 -f aiperf 2>/dev/null
 sleep 2
-ps aux | grep -E 'sglang|aiperf' | grep -v grep | wc -l  # should be 0
+nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
 ```
 
 ## Datasets
@@ -129,8 +102,6 @@ All in `~/datasets/`:
 
 ## Notes
 
-- If server hangs with no errors logged, that is a bug -- check for silent scheduler spin
-- `--watchdog-timeout 120000` prevents false watchdog kills during long benchmarks
-- `--mem-fraction-static 0.50` leaves room for HiCache host memory
-- `--hicache-ratio 2.0` means 2x GPU memory allocated for host-side cache
+- If server hangs with no errors logged, check for silent scheduler spin
 - aiperf repo has its own CLAUDE.md with architecture details -- read it if making aiperf changes
+- Server-specific flags (mem fractions, cache ratios, TP size) belong in the project's CLAUDE.md, not here
