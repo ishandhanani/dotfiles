@@ -44,6 +44,57 @@ done
 
 If no health endpoint, fall back to checking `/v1/models` or process status.
 
+### Launch Script Pattern (optional)
+
+Use a self-contained launch script instead of inline commands when:
+- Multiple processes need coordinating (e.g. Dynamo frontend + prefill + decode workers)
+- You need clean signal-based shutdown across a process group
+- The launch is complex enough that inline commands are unwieldy
+
+For simple single-process launches (one sglang server, one aiperf run), inline commands are fine.
+
+When using this pattern:
+1. Write the script with the trap template below
+2. Save to `/tmp/launch_<name>.sh` or the project's benchmarks dir
+3. Run with `bash /tmp/launch_<name>.sh &`
+
+```bash
+#!/bin/bash
+set -e
+
+LOG_FILE="/tmp/server_$(date +%Y%m%d_%H%M%S).log"
+
+cleanup() {
+    echo "Cleaning up..."
+    kill $SERVER_PID 2>/dev/null || true
+    wait $SERVER_PID 2>/dev/null || true
+    echo "Done. Logs: $LOG_FILE"
+}
+trap cleanup EXIT INT TERM
+
+# Launch server, tee to log file
+python -m sglang.launch_server \
+  --model-path <model> \
+  --port <port> \
+  <flags> 2>&1 | tee "$LOG_FILE" &
+SERVER_PID=$!
+
+# Health check
+for i in $(seq 1 60); do
+  curl -s localhost:<port>/health 2>/dev/null && echo "Server ready" && break
+  sleep 5
+done
+
+wait $SERVER_PID
+```
+
+Benefits:
+- Signal-safe cleanup (no orphaned GPU processes)
+- Logs always in `/tmp/` for debugging (`grep`, `tail -f`, etc.)
+- Script is saveable and re-runnable
+- Extensible for multi-process (frontend + workers) with multiple PIDs
+- Replaces blind `pkill -9` with targeted PID cleanup
+
 ## Step 3: Run Benchmark
 
 Use the appropriate benchmark script or aiperf command. Always:
@@ -77,7 +128,9 @@ After collecting results, invoke `/memory-log` to record findings.
 
 ## Step 5: Cleanup
 
-Always kill server after benchmarks:
+If a launch script was used, cleanup is already handled by the trap -- just kill the script process or send SIGTERM and it will clean up its children.
+
+For orphaned or unknown processes, fall back to `pkill`:
 ```bash
 pkill -9 -f sglang 2>/dev/null
 pkill -9 -f vllm 2>/dev/null
