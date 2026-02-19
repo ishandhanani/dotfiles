@@ -65,7 +65,7 @@ Use the appropriate benchmark script or aiperf command. Always:
 - Run **baseline first**, then **treatment** (e.g., pinned)
 - If results matter, run **both orderings** (A/B then B/A) to control for ordering bias
 - Use a **fresh server** for each phase (kill + relaunch between phases)
-- Save results to `~/design/benchmarks/results/`
+- Save results to `~/memory/agentic-cache-control/benchmarks/results/`
 
 Example with aiperf:
 ```bash
@@ -78,13 +78,13 @@ uv run aiperf profile Qwen/Qwen3-14B-FP8 \
   --concurrency 16 \
   --streaming \
   --request-timeout-seconds 300 \
-  --artifact-dir ~/design/benchmarks/results/
+  --artifact-dir ~/memory/agentic-cache-control/benchmarks/results/
 ```
 
 Example with benchmark script:
 ```bash
 source ~/sglang-poc-pin/.venv/bin/activate
-python ~/design/benchmarks/pin_benchmark_v8.py \
+python ~/memory/agentic-cache-control/benchmarks/pin_benchmark_v8.py \
   --depths 10 \
   --phase baseline \
   --output-dir /tmp/benchmark_results
@@ -97,7 +97,7 @@ python ~/design/benchmarks/pin_benchmark_v8.py \
 curl -s localhost:30000/metrics | grep -E 'hicache|cache_hit|evicted|num_requests' | grep -v '^#'
 
 # Copy results
-cp /tmp/benchmark_results/results.json ~/design/benchmarks/results/
+cp /tmp/benchmark_results/results.json ~/memory/agentic-cache-control/benchmarks/results/
 
 # Check PIN-specific logs if relevant
 grep '\[PIN\]' /tmp/sglang_server_*.log | tail -20
