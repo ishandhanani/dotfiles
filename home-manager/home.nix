@@ -33,6 +33,7 @@ in
     ./modules/git.nix
     ./modules/zsh.nix
     ./modules/uvx.nix
+    ./modules/rust.nix
     ./modules/bash.nix
     ./modules/ssh.nix
     ./modules/neovim.nix
