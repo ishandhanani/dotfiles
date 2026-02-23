@@ -8,6 +8,18 @@
       "~/.brev/ssh_config"
     ];
     matchBlocks = {
+      "*" = {
+        extraOptions = {
+          "AddKeysToAgent" = "yes";
+          "ServerAliveInterval" = "60";
+          "ServerAliveCountMax" = "3";
+        } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+          "UseKeychain" = "yes";
+        };
+        controlMaster = "auto";
+        controlPath = "~/.ssh/sockets/%r@%h-%p";
+        controlPersist = "600";
+      };
       "github.com" = {
         hostname = "github.com";
         user = "git";
@@ -16,13 +28,12 @@
         addKeysToAgent = "yes";
       };
     };
-    extraConfig = ''
-      Host *
-        AddKeysToAgent yes
-        ServerAliveInterval 60
-        ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
-    '';
   };
+
+  # Ensure SSH control socket directory exists
+  home.activation.sshSocketDir = ''
+    mkdir -p ~/.ssh/sockets
+  '';
 
   # Enable ssh-agent only on Linux
   services.ssh-agent.enable = pkgs.stdenv.isLinux;
