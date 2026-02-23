@@ -49,6 +49,15 @@
           };
         };
 
+        "brev-vm-gpu" = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${linuxSystem};
+          modules = [ ./home.nix ];
+          extraSpecialArgs = {
+            user = "nvidia";
+            homeDirectory = "/home/nvidia";
+          };
+        };
+
         "simbox" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${linuxSystem};
           modules = [ ./home.nix ];  # Use the same file with conditionals
