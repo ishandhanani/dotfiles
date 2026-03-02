@@ -4,12 +4,16 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 
 ## Session Start
 
-1. Check for a project-level CLAUDE.md in the repo root -- read it first.
-2. Read `~/memory/INDEX.md` to see the project registry.
+1. Resolve agent identity:
+   - If `CODEX_THREAD_ID` or other `CODEX_*` env vars are present, set `AGENT_KIND=codex`, `AGENT_HOME=${CODEX_HOME:-~/.codex}`, `AGENT_INSTRUCTIONS=CLAUDE.md` (with `AGENTS.md` symlinked to it).
+   - If Claude-specific env vars are present, set `AGENT_KIND=claude`, `AGENT_HOME=${CLAUDE_HOME:-~/.claude}`, `AGENT_INSTRUCTIONS=CLAUDE.md`.
+   - If ambiguous, require explicit `AGENT_KIND`/`AGENT_HOME` from the user instead of guessing.
+2. Check for a project-level `CLAUDE.md` (or `AGENTS.md` symlink) in the repo root -- read it first.
+3. Read `~/memory/INDEX.md` to see the project registry.
    - Match the active project from cwd, git remote, or user prompt.
    - Read the matching project's `~/memory/<project>/INDEX.md` for specs, worklogs, and key results.
    - If no project matches, ask which one.
-3. Check `git worktree list` to understand the checkout layout.
+4. Check `git worktree list` to understand the checkout layout.
 
 ## Session End
 
@@ -33,7 +37,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - When uncertain, ask rather than assume
 - No emojis in code, commits, or communication
 - When referencing code, include `file_path:line_number` for easy navigation
-- **Never mention Claude in PRs or commits. No Co-Authored-By lines.**
+- **Never mention the assistant brand in PRs or commits. No Co-Authored-By lines.**
 
 ## Environment
 

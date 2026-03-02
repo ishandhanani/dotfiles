@@ -1,7 +1,7 @@
 # Dotfiles Makefile
-# Commands to manage Nix configuration and Claude Code setup
+# Commands to manage Nix configuration and agent setup
 
-.PHONY: help install work home vm vm-arm clean backup check claude
+.PHONY: help install work home vm vm-arm clean backup check agents
 
 # Colors
 GREEN := \033[0;32m
@@ -121,7 +121,7 @@ rollback: ## Rollback to previous generation
 	@home-manager rollback
 	@echo "$(GREEN)✓ Rolled back successfully$(NC)"
 
-claude: ## Setup Claude Code configuration (symlinks to ~/.claude/)
-	@echo "$(BLUE)==> Setting up Claude Code configuration...$(NC)"
-	@./claude/setup.sh
-	@echo "$(GREEN)✓ Claude Code configuration applied$(NC)"
+agents: ## Setup shared agent configuration for Claude + Codex
+	@echo "$(BLUE)==> Setting up shared agent configuration...$(NC)"
+	@./setup.sh
+	@echo "$(GREEN)✓ Shared agent configuration applied$(NC)"

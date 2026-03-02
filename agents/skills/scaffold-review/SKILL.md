@@ -1,12 +1,12 @@
 ---
 name: scaffold-review
-description: Analyze conversation history, find gaps and drift in CLAUDE.md and skills, propose and apply targeted improvements.
+description: Analyze conversation history, find gaps and drift in AGENTS/CLAUDE instructions and skills, propose and apply targeted improvements.
 user-invocable: true
 ---
 
 # Scaffold Review
 
-Analyze recent Claude Code conversation history to find what's broken, stale, or missing in your scaffolding (CLAUDE.md, skills, project configs). Propose changes, apply them, and record what you did.
+Analyze recent agent conversation history to find what's broken, stale, or missing in your scaffolding (AGENTS/CLAUDE instructions, skills, project configs). Propose changes, apply them, and record what you did.
 
 The goal is **convergence**: each run brings the scaffold closer to how the user actually works.
 
@@ -14,13 +14,32 @@ The goal is **convergence**: each run brings the scaffold closer to how the user
 
 ## Step 1: Load State
 
+Resolve the active agent home:
+
+```bash
+if [ -n "${AGENT_HOME:-}" ]; then
+  :
+elif [ -n "${CODEX_HOME:-}" ] || [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_CI:-}" ]; then
+  AGENT_HOME="${CODEX_HOME:-$HOME/.codex}"
+elif [ -n "${CLAUDE_HOME:-}" ] || [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_CODE:-}" ]; then
+  AGENT_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+elif [ -d "$HOME/.codex/sessions" ] && [ ! -d "$HOME/.claude/projects" ]; then
+  AGENT_HOME="$HOME/.codex"
+elif [ -d "$HOME/.claude/projects" ] && [ ! -d "$HOME/.codex/sessions" ]; then
+  AGENT_HOME="$HOME/.claude"
+else
+  echo "Unable to infer AGENT_HOME. Set AGENT_HOME explicitly." >&2
+  exit 1
+fi
+```
+
 Read the review ledger (memory of prior runs):
 
-!`cat ~/.claude/scaffold-review-ledger.json 2>/dev/null || echo '{"runs": [], "deferred": [], "trends": []}'`
+!`cat "$AGENT_HOME/scaffold-review-ledger.json" 2>/dev/null || echo '{"runs": [], "deferred": [], "trends": []}'`
 
 Find conversations since last run (or last 14 days if first run), with sizes for budgeting:
 
-!`find ~/.claude/projects/ -name '*.jsonl' -not -path '*/subagents/*' -mtime -14 -size +10k -exec ls -lh {} \; | awk '{print $5, $9}' | sort -k2`
+!`if [ -d "$AGENT_HOME/projects" ]; then find "$AGENT_HOME/projects" -name '*.jsonl' -not -path '*/subagents/*' -mtime -14 -size +10k -exec ls -lh {} \; ; elif [ -d "$AGENT_HOME/sessions" ]; then find "$AGENT_HOME/sessions" -name '*.jsonl' -mtime -14 -size +10k -exec ls -lh {} \; ; fi | awk '{print $5, $9}' | sort -k2`
 
 **Budget check:** If total JSONL exceeds 5MB, split the corpus across agents rather than having each read everything.
 
@@ -28,15 +47,15 @@ Find conversations since last run (or last 14 days if first run), with sizes for
 
 ## Step 2: Extract Signals
 
-Spawn **3 focused subagents** to analyze the conversations in parallel. Each gets a clear, narrow mandate. Use `model: "haiku"` for extraction work.
+Spawn **3 focused subagents** to analyze the conversations in parallel. Each gets a clear, narrow mandate.
 
 ### Agent 1: Corrections & Friction
 
 Scan user messages for:
 - Explicit corrections ("no, I meant...", "that's not what I asked", "actually...")
 - Behavioral directives ("don't do X", "always do Y")
-- Frustration markers (short messages after long Claude responses, re-prompting the same thing)
-- User doing something manually after Claude offered to do it (trust failure)
+- Frustration markers (short messages after long assistant responses, re-prompting the same thing)
+- User doing something manually after the assistant offered to do it (trust failure)
 
 For each correction, answer: **Is there scaffold guidance for this? Was it followed? Was it wrong?**
 
@@ -45,11 +64,11 @@ Output: list of corrections with root cause (missing guidance / stale guidance /
 ### Agent 2: Usage Patterns & Drift
 
 From assistant `tool_use` blocks, extract:
-- **File access heatmap**: top 20 files by Read/Edit frequency. Compare against what CLAUDE.md references.
+- **File access heatmap**: top 20 files by Read/Edit frequency. Compare against what AGENTS/CLAUDE instructions reference.
 - **Command frequency**: top commands by prefix (git, python, cargo, etc.)
 - **Skill invocation rates**: which skills are used, which are never used
 - **New tools/patterns**: anything in recent conversations but not older ones
-- **Dead references**: paths in CLAUDE.md that no longer appear in conversations
+- **Dead references**: paths in AGENTS/CLAUDE instructions that no longer appear in conversations
 
 Output: frequency tables + list of stale/missing references.
 
@@ -61,7 +80,7 @@ Look at multi-step patterns:
 - Things that disappeared: commands/files/patterns that used to appear but don't anymore
 
 Classify patterns by stability:
-- **Crystallized** (5+ conversations): codify into skill or CLAUDE.md
+- **Crystallized** (5+ conversations): codify into skill or AGENTS/CLAUDE instructions
 - **Stable** (3-4): add as guidance, keep watching
 - **Emerging** (2): note as trend, don't codify yet
 
@@ -88,9 +107,9 @@ Output: pattern list with stability ratings + gap analysis.
 ## Step 3: Synthesize & Compare
 
 After all agents report, read the current scaffold:
-- `~/.claude/CLAUDE.md`
-- All `~/.claude/skills/*/SKILL.md`
-- Project-specific CLAUDE.md files (find via conversation paths)
+- `"$AGENT_HOME/CLAUDE.md"` (with `AGENTS.md` symlink for Codex)
+- All `"$AGENT_HOME/skills/*/SKILL.md"`
+- Project-specific `CLAUDE.md` (or `AGENTS.md` symlink) files (find via conversation paths)
 
 Cross-reference agent findings against the scaffold. Classify each finding:
 
@@ -120,7 +139,7 @@ Things the user explicitly corrected. Highest confidence -- apply unless vetoed.
 Reorganizations: sections that should be split into skills, skills that overlap and should merge, info in the wrong file.
 
 ### Tier 3: New Content
-Workflows, paths, patterns that belong in the scaffold but aren't there yet. Apply the necessity test: would this have prevented a specific observed failure? If Claude would get it right without the guidance, don't add it.
+Workflows, paths, patterns that belong in the scaffold but aren't there yet. Apply the necessity test: would this have prevented a specific observed failure? If the assistant would get it right without the guidance, don't add it.
 
 ### Tier 4: Deletions
 Stale content, unused skills, dead references. Show evidence of staleness.
@@ -164,7 +183,7 @@ For approved changes:
 
 Write ledger:
 ```bash
-cat > ~/.claude/scaffold-review-ledger.json << 'EOF'
+cat > "$AGENT_HOME/scaffold-review-ledger.json" << 'EOF'
 <updated ledger content>
 EOF
 ```
@@ -175,7 +194,7 @@ For deferred proposals, record the reason so a future run can reassess.
 
 ## Conversation JSONL Format
 
-Records have a `type` field: `user`, `assistant`, `system`, `progress`, `file-history-snapshot`.
+Records differ by agent implementation. For Claude, records commonly have `type` values such as `user`, `assistant`, `system`, `progress`, `file-history-snapshot`.
 
 **User records:**
 ```json
