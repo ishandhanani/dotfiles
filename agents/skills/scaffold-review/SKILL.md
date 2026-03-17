@@ -47,7 +47,7 @@ Find conversations since last run (or last 14 days if first run), with sizes for
 
 ## Step 2: Extract Signals
 
-Spawn **3 focused subagents** to analyze the conversations in parallel. Each gets a clear, narrow mandate.
+Use **3 focused analyzers** in parallel. For Codex, these are parallel shell/Python extraction passes over JSONL, not separate agent sessions.
 
 ### Agent 1: Corrections & Friction
 
@@ -63,7 +63,7 @@ Output: list of corrections with root cause (missing guidance / stale guidance /
 
 ### Agent 2: Usage Patterns & Drift
 
-From assistant `tool_use` blocks, extract:
+From assistant tool-call records, extract:
 - **File access heatmap**: top 20 files by Read/Edit frequency. Compare against what AGENTS/CLAUDE instructions reference.
 - **Command frequency**: top commands by prefix (git, python, cargo, etc.)
 - **Skill invocation rates**: which skills are used, which are never used
@@ -86,21 +86,58 @@ Classify patterns by stability:
 
 Output: pattern list with stability ratings + gap analysis.
 
-### Subagent Rules (all agents)
+### Analyzer Rules (all analyzers)
 
 1. **Never read a full JSONL file.** Use `head -c 50000` or targeted grep extraction:
    ```bash
-   # User messages only
-   grep '"type":"user"' file.jsonl | python3 -c "import sys,json; [print(json.loads(l)['message']['content'][:200]) for l in sys.stdin]"
+   # Codex user messages
+   python3 - <<'PY'
+   import json
+   for line in open("file.jsonl", errors="ignore"):
+       obj = json.loads(line)
+       if obj.get("type") != "response_item":
+           continue
+       payload = obj.get("payload", {})
+       if payload.get("type") != "message" or payload.get("role") != "user":
+           continue
+       parts = [block.get("text", "") for block in payload.get("content", []) if block.get("type") == "input_text"]
+       text = " ".join(parts)
+       if text:
+           print(text[:200])
+   PY
 
-   # Tool usage counts
-   grep -o '"name":"[^"]*"' file.jsonl | sort | uniq -c | sort -rn | head -20
+   # Codex tool usage counts
+   grep '"type":"function_call"' file.jsonl | grep -o '"name":"[^"]*"' | sort | uniq -c | sort -rn | head -20
 
-   # File paths from Read/Edit calls
-   grep -o '"file_path":"[^"]*"' file.jsonl | sort | uniq -c | sort -rn | head -30
+   # Command prefixes from exec_command calls
+   python3 - <<'PY'
+   import json
+   from collections import Counter
+   counts = Counter()
+   for line in open("file.jsonl", errors="ignore"):
+       obj = json.loads(line)
+       if obj.get("type") != "response_item":
+           continue
+       payload = obj.get("payload", {})
+       if payload.get("type") != "function_call" or payload.get("name") != "exec_command":
+           continue
+       args = json.loads(payload.get("arguments", "{}"))
+       cmd = args.get("cmd", "").strip().splitlines()
+       if cmd:
+           counts[cmd[0].split()[0]] += 1
+   for name, count in counts.most_common(20):
+       print(count, name)
+   PY
    ```
-2. **Max 15-20 conversations per agent.** Sample by recency if there are more.
+2. **Max 15-20 conversations per analyzer.** Sample by recency if there are more.
 3. **Return structured findings in <300 lines.** Conclusions, not data dumps.
+
+### Codex-Specific Notes
+
+- Codex session logs usually store user, assistant, and tool activity under `response_item.payload`.
+- Commentary and final answers are both assistant messages; use `payload.phase` when you need to separate progress updates from final responses.
+- Tool calls appear as `payload.type == "function_call"` with JSON-encoded `arguments`.
+- `write_stdin` polling loops are common in remote or long-running jobs; treat them as one workflow, not separate tasks.
 
 ---
 
@@ -194,30 +231,35 @@ For deferred proposals, record the reason so a future run can reassess.
 
 ## Conversation JSONL Format
 
-Records differ by agent implementation. For Claude, records commonly have `type` values such as `user`, `assistant`, `system`, `progress`, `file-history-snapshot`.
+Records differ by agent implementation.
 
-**User records:**
+For Codex, the common shape is:
+
+**User / assistant messages:**
 ```json
 {
-  "type": "user",
-  "message": { "role": "user", "content": "..." },
-  "timestamp": "..."
-}
-```
-
-**Assistant records:**
-```json
-{
-  "type": "assistant",
-  "message": {
-    "role": "assistant",
+  "type": "response_item",
+  "payload": {
+    "type": "message",
+    "role": "user|assistant|developer",
     "content": [
-      { "type": "text", "text": "..." },
-      { "type": "tool_use", "name": "Bash", "input": { "command": "..." } }
-    ]
+      { "type": "input_text|output_text", "text": "..." }
+    ],
+    "phase": "commentary|final"
   }
 }
 ```
 
-Content blocks in assistant messages: `text`, `tool_use`, `thinking`.
-Tool use blocks have `name` (tool name) and `input` (tool parameters).
+**Tool calls:**
+```json
+{
+  "type": "response_item",
+  "payload": {
+    "type": "function_call",
+    "name": "exec_command",
+    "arguments": "{\"cmd\":\"...\"}"
+  }
+}
+```
+
+Claude-style records may still appear in older logs or other agent homes. Prefer the Codex schema when `~/.codex/sessions` is the source.

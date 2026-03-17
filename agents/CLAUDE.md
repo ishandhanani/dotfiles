@@ -25,6 +25,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 
 ## How I Work
 
+- **Direct path first.** Start with the narrowest viable fix that satisfies the request. Do not introduce temporary branches, helper layers, alternate implementations, or broader redesigns unless the direct path is blocked.
 - **Performance over correctness-first.** Optimize by default. Profile before guessing.
 - **Empirical validation.** Prove it with logs, metrics, benchmarks. Show numbers, not theory.
 - **No speculation.** Reproduce first, explain second. Don't theorize at length.
