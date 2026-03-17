@@ -147,6 +147,7 @@ After all agents report, read the current scaffold:
 - `"$AGENT_HOME/CLAUDE.md"` (with `AGENTS.md` symlink for Codex)
 - All `"$AGENT_HOME/skills/*/SKILL.md"`
 - Project-specific `CLAUDE.md` (or `AGENTS.md` symlink) files (find via conversation paths)
+- If the scaffold repo uses split sources such as `agents/common.md` plus `agents/codex.md` / `agents/claude.md`, read the matching overlay and compare against the rendered `"$AGENT_HOME/CLAUDE.md"` for drift.
 
 Cross-reference agent findings against the scaffold. Classify each finding:
 

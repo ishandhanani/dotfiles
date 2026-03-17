@@ -3,7 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/agents"
-CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
+COMMON_SRC="$SOURCE_DIR/common.md"
+CODEX_SRC="$SOURCE_DIR/codex.md"
+CLAUDE_OVERLAY_SRC="$SOURCE_DIR/claude.md"
 SKILLS_SRC="$SOURCE_DIR/skills"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -12,8 +14,18 @@ if [[ $# -gt 0 ]]; then
     exit 1
 fi
 
-if [[ ! -f "$CLAUDE_SRC" ]]; then
-    echo "Missing source file: $CLAUDE_SRC" >&2
+if [[ ! -f "$COMMON_SRC" ]]; then
+    echo "Missing source file: $COMMON_SRC" >&2
+    exit 1
+fi
+
+if [[ ! -f "$CODEX_SRC" ]]; then
+    echo "Missing source file: $CODEX_SRC" >&2
+    exit 1
+fi
+
+if [[ ! -f "$CLAUDE_OVERLAY_SRC" ]]; then
+    echo "Missing source file: $CLAUDE_OVERLAY_SRC" >&2
     exit 1
 fi
 
@@ -53,10 +65,34 @@ create_link() {
     echo "Linked $dest -> $src"
 }
 
+render_instruction() {
+    local common_src="$1"
+    local overlay_src="$2"
+    local dest="$3"
+    local backup_dir="$4"
+
+    if [[ ! -e "$common_src" ]]; then
+        echo "Source not found: $common_src" >&2
+        return 1
+    fi
+
+    if [[ ! -e "$overlay_src" ]]; then
+        echo "Source not found: $overlay_src" >&2
+        return 1
+    fi
+
+    backup_if_needed "$dest" "$backup_dir"
+    mkdir -p "$(dirname "$dest")"
+    cat "$common_src" > "$dest"
+    printf '\n\n' >> "$dest"
+    cat "$overlay_src" >> "$dest"
+    echo "Rendered $dest from $common_src + $overlay_src"
+}
+
 install_agent() {
     local label="$1"
     local target_dir="$2"
-    local primary_instruction="$3"
+    local overlay_src="$3"
     local backup_dir="$HOME/.${label}-backup-${TIMESTAMP}"
 
     echo ""
@@ -64,7 +100,7 @@ install_agent() {
     echo "-----------------------------"
     mkdir -p "$target_dir"
 
-    create_link "$CLAUDE_SRC" "$target_dir/$primary_instruction" "$backup_dir"
+    render_instruction "$COMMON_SRC" "$overlay_src" "$target_dir/CLAUDE.md" "$backup_dir"
     mkdir -p "$target_dir/skills"
 
     for skill_dir in "$SKILLS_SRC"/*; do
@@ -77,7 +113,7 @@ install_agent() {
 
     echo ""
     echo "Installed in $target_dir:"
-    echo "  $primary_instruction"
+    echo "  CLAUDE.md"
     for skill_dir in "$SKILLS_SRC"/*; do
         if [[ -d "$skill_dir" ]]; then
             echo "  skills/$(basename "$skill_dir")"
@@ -94,8 +130,8 @@ echo "Agent config setup"
 echo "=================="
 echo "Source: $SOURCE_DIR"
 
-install_agent "claude" "$HOME/.claude" "CLAUDE.md"
-install_agent "codex" "${CODEX_HOME:-$HOME/.codex}" "CLAUDE.md"
+install_agent "claude" "$HOME/.claude" "$CLAUDE_OVERLAY_SRC"
+install_agent "codex" "${CODEX_HOME:-$HOME/.codex}" "$CODEX_SRC"
 
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 backup_if_needed "$CODEX_DIR/AGENTS.md" "$HOME/.codex-backup-${TIMESTAMP}"
