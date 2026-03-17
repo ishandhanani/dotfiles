@@ -8,7 +8,7 @@ user-invocable: true
 
 Manages the full cycle: kill stale -> launch -> health check -> benchmark -> collect results -> kill.
 
-Works with any inference server (SGLang, vLLM, TRT-LLM, etc.). Project-specific args come from the project's CLAUDE.md or `~/memory/<project>/INDEX.md`.
+Works with any inference server (SGLang, vLLM, TRT-LLM, etc.). Project-specific args come from the project's `CLAUDE.md` (or `AGENTS.md` symlink) or `~/memory/<project>/INDEX.md`.
 
 ## Step 1: Clean Environment
 
@@ -31,7 +31,7 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader
 
 Determine project context:
 1. Check user prompt or cwd for project identity
-2. Read the project's CLAUDE.md and `~/memory/<project>/INDEX.md` for launch args
+2. Read the project's `CLAUDE.md` (or `AGENTS.md` symlink) and `~/memory/<project>/INDEX.md` for launch args
 3. Activate the project's venv
 
 Launch as background task. Poll for health:
@@ -156,5 +156,5 @@ All in `~/datasets/`:
 ## Notes
 
 - If server hangs with no errors logged, check for silent scheduler spin
-- aiperf repo has its own CLAUDE.md with architecture details -- read it if making aiperf changes
-- Server-specific flags (mem fractions, cache ratios, TP size) belong in the project's CLAUDE.md, not here
+- aiperf repo has its own agent instructions (`CLAUDE.md` or `AGENTS.md` symlink) with architecture details -- read them if making aiperf changes
+- Server-specific flags (mem fractions, cache ratios, TP size) belong in the project's agent instructions, not here
