@@ -43,8 +43,8 @@ create_link() {
     local backup_dir="$3"
 
     if [[ ! -e "$src" ]]; then
-        echo "Source not found: $src"
-        return
+        echo "Source not found: $src" >&2
+        return 1
     fi
 
     backup_if_needed "$dest" "$backup_dir"
