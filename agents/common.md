@@ -15,8 +15,15 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 
 When a session produces meaningful results, log to `~/memory/` before finishing. Use `/memory-log` or apply the convention directly:
 - **What to log**: benchmark results, design decisions, implementation milestones, bugs found, key findings. Not routine edits.
-- **Where**: append to the relevant worklog in `~/memory/<project>/`, or create a new file if it's a new topic.
+- **Where**: prefer the existing `worklog.md` in `~/memory/<project>/`. If a topic needs its own evidence log, use `worklog-<topic>.md`.
+- **How to split docs**:
+  - `INDEX.md` is the entrypoint only
+  - `CURRENT_STATE.md` holds mutable status / next steps
+  - `RUNBOOK.md` holds commands, paths, and operational gotchas
+  - `DECISIONS.md` holds durable architecture decisions
+  - worklogs are append-only evidence, not mutable summaries
 - **Update frontmatter**: bump `last-updated` in the project INDEX.md.
+- **Worklog ordering**: newest sections go at the top.
 - **Commit**: `cd ~/memory && git add -A && git commit -m "<project>: <short description>"`. Do not push.
 
 ## How I Work

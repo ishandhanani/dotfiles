@@ -41,7 +41,7 @@ Determine what type of entry this is:
 | Type | Where to write | Example |
 |------|---------------|---------|
 | **Benchmark result** | `benchmarks/results/<date>_<description>/` | New perf numbers, comparison data |
-| **Implementation progress** | Append to existing worklog in project folder | Feature done, endpoint working, integration validated |
+| **Implementation progress** | Append to `worklog.md` or `worklog-<topic>.md` in the project folder | Feature done, endpoint working, integration validated |
 | **Design decision** | Specs folder or relevant doc | Changed approach, chose between alternatives |
 | **Bug/investigation** | New or existing doc in project folder | Root cause found, reproduction steps, fix applied |
 | **Finding/insight** | Relevant existing doc, or new file | Discovered behavior, measured something unexpected |
@@ -56,9 +56,17 @@ Format rules:
 - **Include evidence**: actual numbers, command output, log snippets. Not "it was faster."
 - **Link context**: reference file paths, git commits, or other memory docs where relevant.
 
-If appending to an existing worklog, add the new section at the end.
+Prefer these document roles:
+- `INDEX.md`: project entrypoint only
+- `CURRENT_STATE.md`: mutable summary of current status / risks / next steps
+- `worklog.md`: default chronological evidence log
+- `worklog-<topic>.md`: topic-specific chronological evidence log
+- `RUNBOOK.md`: commands, paths, operational gotchas
+- `DECISIONS.md`: durable architecture decisions
 
-If creating a new file, use a descriptive name: `FEATURE_NAME_WORKLOG.md`, `BUG_DESCRIPTION.md`, etc.
+If appending to an existing worklog, add the new section at the top. Worklogs are append-only and newest-first.
+
+If creating a new evidence log, prefer `worklog.md` or `worklog-<topic>.md`. Keep descriptive names for deep investigations or specs where that improves clarity.
 
 ---
 
