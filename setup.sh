@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/agents"
 CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
+CLAUDE_SETTINGS_SRC="$SOURCE_DIR/claude-settings.json"
+CLAUDE_STATUSLINE_SRC="$SOURCE_DIR/statusline-command.sh"
 SKILLS_SRC="$SOURCE_DIR/skills"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -19,6 +21,16 @@ fi
 
 if [[ ! -d "$SKILLS_SRC" ]]; then
     echo "Missing skills directory: $SKILLS_SRC" >&2
+    exit 1
+fi
+
+if [[ ! -f "$CLAUDE_SETTINGS_SRC" ]]; then
+    echo "Missing source file: $CLAUDE_SETTINGS_SRC" >&2
+    exit 1
+fi
+
+if [[ ! -f "$CLAUDE_STATUSLINE_SRC" ]]; then
+    echo "Missing source file: $CLAUDE_STATUSLINE_SRC" >&2
     exit 1
 fi
 
@@ -90,11 +102,23 @@ install_agent() {
     fi
 }
 
+install_claude_runtime_files() {
+    local target_dir="$1"
+    local backup_dir="$HOME/.claude-backup-${TIMESTAMP}"
+
+    create_link "$CLAUDE_SETTINGS_SRC" "$target_dir/claude-settings.json" "$backup_dir"
+    create_link "$CLAUDE_STATUSLINE_SRC" "$target_dir/statusline-command.sh" "$backup_dir"
+
+    echo "  claude-settings.json"
+    echo "  statusline-command.sh"
+}
+
 echo "Agent config setup"
 echo "=================="
 echo "Source: $SOURCE_DIR"
 
 install_agent "claude" "$HOME/.claude" "CLAUDE.md"
+install_claude_runtime_files "$HOME/.claude"
 install_agent "codex" "${CODEX_HOME:-$HOME/.codex}" "CLAUDE.md"
 
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
