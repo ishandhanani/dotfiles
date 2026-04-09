@@ -40,11 +40,10 @@ Determine what type of entry this is:
 
 | Type | Where to write | Example |
 |------|---------------|---------|
-| **Benchmark result** | `benchmarks/results/<date>_<description>/` | New perf numbers, comparison data |
-| **Implementation progress** | Append to `worklog.md` or `worklog-<topic>.md` in the project folder | Feature done, endpoint working, integration validated |
-| **Design decision** | Specs folder or relevant doc | Changed approach, chose between alternatives |
-| **Bug/investigation** | New or existing doc in project folder | Root cause found, reproduction steps, fix applied |
-| **Finding/insight** | Relevant existing doc, or new file | Discovered behavior, measured something unexpected |
+| **Chronology / progress** | Append to the project's existing worklog | Feature done, endpoint working, integration validated |
+| **Project state update** | Update `INDEX.md` when the conclusion should be easy to recover later | Root cause, benchmark conclusion, validated constraint |
+| **Evidence bundle** | `experiments/<date>-<topic>/` when multiple artifacts need to stay together | Configs, results, plots, repro scripts |
+| **Bug/investigation note** | Existing worklog or focused project doc | Reproduction steps, partial understanding, debugging thread |
 
 ---
 
@@ -57,16 +56,23 @@ Format rules:
 - **Link context**: reference file paths, git commits, or other memory docs where relevant.
 
 Prefer these document roles:
-- `INDEX.md`: project entrypoint only
-- `CURRENT_STATE.md`: mutable summary of current status / risks / next steps
-- `worklog.md`: default chronological evidence log
-- `worklog-<topic>.md`: topic-specific chronological evidence log
-- `RUNBOOK.md`: commands, paths, operational gotchas
-- `DECISIONS.md`: durable architecture decisions
+- `INDEX.md`: live brief, current state, durable conclusions, and high-signal pointers
+- `worklogs/` or existing worklog files: chronological evidence log
+- `worklog-<topic>.md`: topic-specific chronology only when the project already uses that pattern
+- `experiments/`: bundled evidence and reproducibility artifacts
+- `maintenance/log.md`: repo operational changes, not project technical memory
 
 If appending to an existing worklog, add the new section at the top. Worklogs are append-only and newest-first.
 
-If creating a new evidence log, prefer `worklog.md` or `worklog-<topic>.md`. Keep descriptive names for deep investigations or specs where that improves clarity.
+When a conclusion should be easy to recover later, update the project `INDEX.md` with a concise summary and links back to the supporting worklog or experiment.
+
+Use this promotion test before expanding beyond the worklog:
+
+- will a future session likely need this conclusion again?
+- would rereading chronology be a bad way to recover it?
+- does it influence future decisions or interpretation?
+
+If the answer is mostly no, keep it in the worklog.
 
 ---
 
@@ -81,6 +87,8 @@ last-updated: <today's date>
 If the project status changed (e.g., work completed), update `status` too.
 
 Also update `~/memory/INDEX.md` registry table to keep the "Last Active" column current.
+
+If the project `INDEX.md` uses `worklog_refs` or `experiment_refs`, keep those pointers accurate when you materially change the project state.
 
 ---
 
@@ -101,6 +109,7 @@ If logging to a project that doesn't exist yet in `~/memory/`:
 1. Create `~/memory/<project-name>/INDEX.md` with frontmatter:
    ```yaml
    ---
+   type: project
    project: <project-name>
    repo: <path or null>
    branch: <branch or null>
@@ -110,5 +119,6 @@ If logging to a project that doesn't exist yet in `~/memory/`:
    ---
    ```
 2. Add a brief description and any initial content
-3. Add a row to `~/memory/INDEX.md` registry table
-4. Commit as above
+3. Create `worklogs/` and start the first canonical worklog if the repo contract expects it
+4. Add a row to `~/memory/INDEX.md` registry table
+5. Commit as above
