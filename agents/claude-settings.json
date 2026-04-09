@@ -1,0 +1,7 @@
+{
+  "autoMemoryEnabled": false,
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  }
+}
