@@ -1,6 +1,6 @@
 ---
 name: insight-codex
-description: Generate a shareable HTML usage report from local Codex session logs. Use when the user asks for an insights page like Claude Code's `/insights`, wants a summary of how they use Codex over time, wants session/tool/git/subagent/friction metrics, or wants machine-readable per-session metadata derived from `~/.codex/sessions`.
+description: Generate a shareable HTML usage report from local Codex session logs. Use when the user asks for an insights page like Claude Code's `/insights`, wants a summary of how they use Codex over time, wants session/tool/git/subagent/friction metrics, or wants machine-readable per-session metadata derived from the active Codex home.
 ---
 
 # Insight Codex
@@ -9,7 +9,7 @@ Generate a local-only usage report from Codex JSONL session logs. The main artif
 
 ## Workflow
 
-1. Resolve `CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"`.
+1. Resolve `CODEX_HOME` from the environment or pass `--codex-home` explicitly.
 2. Run the generator script with defaults unless the user asks for a narrower slice.
 3. Return the path to `report.html` and summarize the most useful numbers.
 4. If the user wants a smaller window, rerun with `--days` or `--limit`.
@@ -17,11 +17,10 @@ Generate a local-only usage report from Codex JSONL session logs. The main artif
 ## Commands
 
 ```bash
-CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-python3 "$CODEX_HOME/skills/insight-codex/scripts/generate_report.py"
-python3 "$CODEX_HOME/skills/insight-codex/scripts/generate_report.py" --days 30
-python3 "$CODEX_HOME/skills/insight-codex/scripts/generate_report.py" --limit 20
-python3 "$CODEX_HOME/skills/insight-codex/scripts/generate_report.py" --output-dir /tmp/codex-insights
+python3 "${CODEX_HOME:?}/skills/insight-codex/scripts/generate_report.py"
+python3 "${CODEX_HOME:?}/skills/insight-codex/scripts/generate_report.py" --days 30
+python3 "${CODEX_HOME:?}/skills/insight-codex/scripts/generate_report.py" --limit 20
+python3 "${CODEX_HOME:?}/skills/insight-codex/scripts/generate_report.py" --codex-home "$CODEX_HOME" --output-dir /tmp/codex-insights
 ```
 
 ## Outputs
@@ -33,6 +32,6 @@ python3 "$CODEX_HOME/skills/insight-codex/scripts/generate_report.py" --output-d
 
 ## Notes
 
-- Use only local files under `"$CODEX_HOME/sessions"`; do not browse.
+- Use only local files under the resolved Codex home; do not browse.
 - The report is intentionally operational rather than speculative. It summarizes stable signals from message phases, function calls, command prefixes, token counters, and non-zero exit codes.
 - Correction-style user turns are heuristic. Treat them as a friction indicator, not ground truth.

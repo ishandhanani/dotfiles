@@ -114,6 +114,7 @@ FRICTION_INFO = {
 GIT_COMMIT_CMD_RE = re.compile(r"(^|&&|;|\|\||\n)\s*git\s+commit\b")
 GIT_PUSH_CMD_RE = re.compile(r"(^|&&|;|\|\||\n)\s*git\s+push\b")
 GH_CMD_RE = re.compile(r"(^|&&|;|\|\||\n)\s*gh\b")
+HOME_DIR = Path.home().resolve()
 
 
 @dataclass
@@ -269,21 +270,29 @@ def codex_home() -> Path:
     raw = os.environ.get("CODEX_HOME")
     if raw:
         return Path(raw).expanduser()
+    script_path = Path(__file__).resolve()
+    for parent in script_path.parents:
+        if parent.name == "skills" and (parent.parent / "sessions").exists():
+            return parent.parent
     return Path.home() / ".codex"
 
 
 def parse_args() -> argparse.Namespace:
-    default_home = codex_home()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--sessions-root",
-        default=str(default_home / "sessions"),
-        help="Root directory containing Codex session JSONL files.",
+        default=None,
+        help="Root directory containing Codex session JSONL files. Defaults to <codex-home>/sessions.",
     )
     parser.add_argument(
         "--output-dir",
-        default=str(default_home / "usage-data"),
-        help="Directory for report.html, session-meta/, and facets/.",
+        default=None,
+        help="Directory for report.html, session-meta/, and facets/. Defaults to <codex-home>/usage-data.",
+    )
+    parser.add_argument(
+        "--codex-home",
+        default=None,
+        help="Codex home used to derive default input and output locations.",
     )
     parser.add_argument(
         "--days",
@@ -319,16 +328,17 @@ def is_real_user_message(text: str) -> bool:
 
 
 def repo_key_from_cwd(cwd: str) -> str:
-    path = Path(cwd)
+    path = Path(cwd).expanduser().resolve(strict=False)
     parts = path.parts
-    if str(path) == "/home/ubuntu":
+    home_parts = HOME_DIR.parts
+    if path == HOME_DIR:
         return "home"
     if str(path) == "/ephemeral":
         return "ephemeral"
     if len(parts) >= 3 and parts[1] == "ephemeral":
         return parts[2].lower()
-    if len(parts) >= 4 and parts[1] == "home" and parts[2] == "ubuntu":
-        return parts[3].lower()
+    if len(parts) > len(home_parts) and parts[: len(home_parts)] == home_parts:
+        return parts[len(home_parts)].lower()
     if parts:
         return parts[-1].lower()
     return "unknown"
@@ -1541,8 +1551,20 @@ def write_json(path: Path, payload: Any) -> None:
 
 def main() -> None:
     args = parse_args()
-    sessions_root = Path(args.sessions_root).expanduser()
-    output_dir = Path(args.output_dir).expanduser()
+    if args.codex_home:
+        resolved_codex_home = Path(args.codex_home).expanduser()
+    else:
+        resolved_codex_home = codex_home()
+    sessions_root = (
+        Path(args.sessions_root).expanduser()
+        if args.sessions_root
+        else resolved_codex_home / "sessions"
+    )
+    output_dir = (
+        Path(args.output_dir).expanduser()
+        if args.output_dir
+        else resolved_codex_home / "usage-data"
+    )
     session_meta_dir = output_dir / "session-meta"
     facets_dir = output_dir / "facets"
     session_meta_dir.mkdir(parents=True, exist_ok=True)
