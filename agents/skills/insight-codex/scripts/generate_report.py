@@ -161,6 +161,8 @@ class EnrichedSession:
     outcome: str
     session_type: str
     primary_success: str
+    user_satisfaction: str
+    codex_helpfulness: str
 
 
 @dataclass
@@ -293,6 +295,21 @@ def parse_args() -> argparse.Namespace:
         "--codex-home",
         default=None,
         help="Codex home used to derive default input and output locations.",
+    )
+    parser.add_argument(
+        "--evidence-file",
+        default=None,
+        help="Path for the extracted evidence bundle. Defaults to <output-dir>/analysis-input.json.",
+    )
+    parser.add_argument(
+        "--synthesis-file",
+        default=None,
+        help="Optional path to a Codex-written synthesis JSON. Defaults to <output-dir>/synthesis.json when present.",
+    )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Only write machine-readable evidence and skip HTML rendering.",
     )
     parser.add_argument(
         "--days",
@@ -634,6 +651,42 @@ def infer_primary_success(session: SessionSummary, goals: Counter[str]) -> str:
     return "analysis_and_orientation"
 
 
+def infer_user_satisfaction(session: SessionSummary, friction: Counter[str], outcome: str) -> str:
+    friction_total = sum(friction.values())
+    if outcome == "achieved" and session.tool_errors <= 4 and session.correction_signals <= 1:
+        return "Satisfied"
+    if (
+        outcome in {"achieved", "mostly_achieved"}
+        or (session.final_count and friction_total <= 2 and session.correction_signals == 0)
+    ) and session.tool_errors <= 10:
+        return "Likely satisfied"
+    if outcome == "partial_progress" or friction_total >= 9 or (
+        session.correction_signals >= 3 and session.tool_errors >= 6
+    ):
+        return "Dissatisfied"
+    if friction_total >= 5 or session.correction_signals >= 2 or session.tool_errors >= 8:
+        return "Mixed"
+    return "Likely satisfied"
+
+
+def infer_codex_helpfulness(
+    session: SessionSummary,
+    friction: Counter[str],
+    outcome: str,
+    satisfaction: str,
+) -> str:
+    shipping = session.git_commits + session.git_pushes
+    if outcome == "achieved" and (shipping >= 2 or session.tool_counts.get("exec_command", 0) >= 25):
+        return "Essential"
+    if satisfaction in {"Satisfied", "Likely satisfied"} and outcome in {"achieved", "mostly_achieved"}:
+        return "Very helpful"
+    if satisfaction != "Dissatisfied" and (session.final_count or sum(friction.values()) <= 6):
+        return "Helpful"
+    if satisfaction == "Dissatisfied":
+        return "Low value"
+    return "Mixed"
+
+
 def build_friction_detail(session: SessionSummary, friction: Counter[str]) -> str:
     if not friction:
         return ""
@@ -653,14 +706,18 @@ def build_friction_detail(session: SessionSummary, friction: Counter[str]) -> st
 def enrich_session(session: SessionSummary) -> EnrichedSession:
     goals = infer_goal_categories(session)
     friction = infer_friction_counts(session)
+    outcome = infer_outcome(session, goals, friction)
+    user_satisfaction = infer_user_satisfaction(session, friction, outcome)
     return EnrichedSession(
         session=session,
         goal_categories=dict(goals.most_common()),
         friction_counts=dict(friction.most_common()),
         friction_detail=build_friction_detail(session, friction),
-        outcome=infer_outcome(session, goals, friction),
+        outcome=outcome,
         session_type=infer_session_type(session, goals),
         primary_success=infer_primary_success(session, goals),
+        user_satisfaction=user_satisfaction,
+        codex_helpfulness=infer_codex_helpfulness(session, friction, outcome, user_satisfaction),
     )
 
 
@@ -679,6 +736,8 @@ def build_facets(session: SessionSummary) -> dict[str, Any]:
         "friction_counts": enriched.friction_counts,
         "friction_detail": enriched.friction_detail,
         "primary_success": enriched.primary_success,
+        "user_satisfaction_counts": {enriched.user_satisfaction.lower().replace(" ", "_"): 1},
+        "codex_helpfulness": enriched.codex_helpfulness.lower().replace(" ", "_"),
         "top_tools": top_tools,
         "top_commands": top_commands,
         "friction": {
@@ -978,48 +1037,187 @@ def build_friction_sections(enriched_sessions: list[EnrichedSession]) -> list[di
     return sections
 
 
-def build_feature_cards(
+def build_satisfaction_counts(enriched_sessions: list[EnrichedSession]) -> tuple[Counter[str], Counter[str]]:
+    satisfaction_counter: Counter[str] = Counter()
+    helpfulness_counter: Counter[str] = Counter()
+    for enriched in enriched_sessions:
+        satisfaction_counter[enriched.user_satisfaction] += 1
+        helpfulness_counter[enriched.codex_helpfulness] += 1
+    return satisfaction_counter, helpfulness_counter
+
+
+def satisfaction_summary(
+    satisfaction_counter: Counter[str],
+    helpfulness_counter: Counter[str],
+) -> str:
+    positive = (
+        satisfaction_counter.get("Satisfied", 0)
+        + satisfaction_counter.get("Likely satisfied", 0)
+    )
+    negative = satisfaction_counter.get("Dissatisfied", 0)
+    helpful = (
+        helpfulness_counter.get("Essential", 0)
+        + helpfulness_counter.get("Very helpful", 0)
+    )
+    total = sum(satisfaction_counter.values()) or 1
+    if positive * 2 >= total:
+        return (
+            f"Even with visible friction, inferred satisfaction still skews positive: {format_int(positive)} "
+            f"satisfied or likely satisfied sessions against {format_int(negative)} dissatisfied ones. "
+            f"Helpfulness also clusters high, with {format_int(helpful)} sessions landing in essential or very helpful territory."
+        )
+    return (
+        f"Inferred satisfaction is mixed: {format_int(positive)} positive sessions against "
+        f"{format_int(negative)} dissatisfied ones. That suggests Codex is useful, but still leaves too many sessions "
+        "with enough churn that the overall experience feels conditional rather than reliably smooth."
+    )
+
+
+def build_agent_md_additions(
     total_errors: int,
     total_pushes: int,
     total_commits: int,
     total_corrections: int,
+    github_app_sessions: int,
+    plan_sessions: int,
     delegated_sessions: int,
 ) -> list[dict[str, str]]:
     return [
         {
-            "title": "Pre-push validation gate",
-            "oneliner": "Have Codex run the whole local validation stack before any push.",
+            "section": "## Pre-Push Checklist",
+            "text": (
+                "Before any push, run the full local validation loop for the active repo. "
+                "Fix every failing check and rerun the full suite before preparing the push summary."
+            ),
             "why": (
                 f"The corpus contains {format_int(total_commits)} commits, {format_int(total_pushes)} pushes, and {format_int(total_errors)} non-zero exits. "
                 "That is exactly the profile where an explicit build/test gate pays off."
             ),
-            "prompt": (
-                "Before pushing anything, run the full local validation loop for this repo. Fix every failing check, rerun the full suite, and only then prepare the push summary."
+        },
+        {
+            "section": "## Session Starts",
+            "text": (
+                "For multi-step, ambiguous, or review-heavy tasks, create a short explicit plan before editing. "
+                "Keep exactly one step in progress and update the plan as work completes."
+            ),
+            "why": (
+                f"Correction-style turns appeared {format_int(total_corrections)} times, while built-in planning showed up in only {format_int(plan_sessions)} sessions. "
+                "A short plan-first checkpoint would likely cut down wrong-path exploration."
             ),
         },
         {
-            "title": "Plan-first reconnaissance",
-            "oneliner": "Force a short orientation pass before edits when the task looks multi-step.",
-            "why": (
-                f"Correction-style turns appeared {format_int(total_corrections)} times. "
-                "A lightweight map-the-codebase-first step would likely cut down wrong-path exploration."
+            "section": "## GitHub Workflow",
+            "text": (
+                "For PR review, comment triage, or check-status tasks, prefer the GitHub connector first. "
+                "Pull metadata, changed files, comments, and checks before switching to shell-heavy exploration."
             ),
-            "prompt": (
-                "Before making changes, map the relevant files, recent git history, and validation path. Give me a 3-bullet plan and wait for approval before editing."
+            "why": (
+                f"GitHub connector usage appeared in {format_int(github_app_sessions)} sessions, but review work still often falls back to manual shell choreography. "
+                "Making connector-first behavior explicit should reduce avoidable context rebuilding."
             ),
         },
         {
-            "title": "Workflow macros for repeated session types",
-            "oneliner": "Start sessions with a repo-aware checklist instead of free-form context rebuilding.",
-            "why": (
-                f"Delegation showed up in {format_int(delegated_sessions)} sessions, but most work is still driven through repeated shell choreography. "
-                "Codifying merge, review, benchmark, and scaffold-maintenance starts would remove setup overhead."
+            "section": "## Parallel Work",
+            "text": (
+                "When exploration naturally splits across modules, logs, or test surfaces, use subagents with explicit ownership "
+                "and disjoint write scopes instead of serially re-reading the whole codebase."
             ),
-            "prompt": (
-                "Treat this as a [review|merge|benchmark|scaffold] session. Load the relevant project memory, inspect git/worktree state, identify the validation loop, and then propose the narrowest path forward."
+            "why": (
+                f"Subagents showed up in {format_int(delegated_sessions)} sessions already, which is enough signal that explicit delegation belongs in the default playbook."
             ),
         },
     ]
+
+
+def build_product_feature_cards(
+    total_corrections: int,
+    github_app_sessions: int,
+    plan_sessions: int,
+    delegated_sessions: int,
+) -> list[dict[str, str]]:
+    return [
+        {
+            "title": "Built-in Plans",
+            "oneliner": "Use explicit step tracking for long-running multi-step work.",
+            "why": (
+                f"`update_plan` appeared in {format_int(plan_sessions)} sessions, but correction-style turns still appeared {format_int(total_corrections)} times. "
+                "That makes planning feel underused relative to the complexity of your workload."
+            ),
+            "prompt_label": "Paste into Codex",
+            "prompt": (
+                "This is a multi-step task. Create a short plan first, keep exactly one step in progress, and update the plan as each step completes."
+            ),
+        },
+        {
+            "title": "Subagents",
+            "oneliner": "Parallelize codebase exploration and bounded execution with built-in agents.",
+            "why": (
+                f"Subagents showed up in {format_int(delegated_sessions)} sessions, which is enough evidence that parallel decomposition fits how you work when a task spans multiple code areas."
+            ),
+            "prompt_label": "Paste into Codex",
+            "prompt": (
+                "Use subagents to inspect the relevant API surface, test coverage, and failure path in parallel. Have each agent own a disjoint slice and report back before integration."
+            ),
+        },
+        {
+            "title": "GitHub Connector",
+            "oneliner": "Pull PR metadata, review comments, and check state without rebuilding context manually.",
+            "why": (
+                f"The GitHub connector appeared in {format_int(github_app_sessions)} sessions, but review and PR work still leans heavily on repeated shell commands. "
+                "Connector-first triage is a better fit for that workload."
+            ),
+            "prompt_label": "Paste into Codex",
+            "prompt": (
+                "Treat this as a GitHub review session. Fetch PR metadata, changed files, inline comments, and failing checks before editing any code."
+            ),
+        },
+    ]
+
+
+def session_evidence(enriched: EnrichedSession) -> dict[str, Any]:
+    session = enriched.session
+    return {
+        "session_id": session.session_id,
+        "repo": session.repo,
+        "repo_label": display_repo_name(session.repo),
+        "start_time": session.start_time,
+        "duration_minutes": session.duration_minutes,
+        "first_prompt": session.first_prompt,
+        "brief_summary": session.brief_summary,
+        "goal_categories": enriched.goal_categories,
+        "outcome": enriched.outcome,
+        "session_type": enriched.session_type,
+        "primary_success": enriched.primary_success,
+        "friction_counts": enriched.friction_counts,
+        "friction_detail": enriched.friction_detail,
+        "user_satisfaction": enriched.user_satisfaction,
+        "codex_helpfulness": enriched.codex_helpfulness,
+        "top_commands": list(session.command_prefixes.items())[:4],
+        "top_tools": list(session.tool_counts.items())[:4],
+        "tool_errors": session.tool_errors,
+        "correction_signals": session.correction_signals,
+        "git_commits": session.git_commits,
+        "git_pushes": session.git_pushes,
+        "uses_subagents": session.uses_subagents,
+        "uses_github_app": session.uses_github_app,
+        "uses_update_plan": session.uses_update_plan,
+    }
+
+
+def merge_synthesis(default: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
+    if not override:
+        return default
+    merged = dict(default)
+    for key, value in override.items():
+        if value is None:
+            continue
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            inner = dict(merged[key])
+            inner.update(value)
+            merged[key] = inner
+        else:
+            merged[key] = value
+    return merged
 
 
 def build_pattern_cards(
@@ -1096,14 +1294,18 @@ def build_feedback_cards() -> list[dict[str, str]]:
     ]
 
 
-def render_prompt_block(prompt: str, ident: str) -> str:
+def render_prompt_block(prompt: str, ident: str, label: str = "Copyable Prompt") -> str:
     return (
         "<div class='pattern-prompt'>"
-        "<div class='prompt-label'>Copyable Prompt</div>"
+        f"<div class='prompt-label'>{html.escape(label)}</div>"
         f"<code id='{ident}'>{html.escape(prompt)}</code>"
         f"<button class='copy-btn' onclick=\"copyPrompt('{ident}', this)\">Copy</button>"
         "</div>"
     )
+
+
+def render_paragraphs(paragraphs: list[str]) -> str:
+    return "".join(f"<p>{html.escape(paragraph)}</p>" for paragraph in paragraphs if paragraph)
 
 
 def render_big_wins(cards: list[dict[str, str]]) -> str:
@@ -1134,12 +1336,36 @@ def render_feature_cards(cards: list[dict[str, str]], prefix: str) -> str:
     rendered = []
     for idx, card in enumerate(cards, start=1):
         ident = f"{prefix}-{idx}"
+        prompt_html = ""
+        if card.get("prompt"):
+            prompt_html = render_prompt_block(
+                card["prompt"],
+                ident,
+                card.get("prompt_label", "Copyable Prompt"),
+            )
         rendered.append(
             "<div class='feature-card'>"
             f"<div class='feature-title'>{html.escape(card['title'])}</div>"
             f"<div class='feature-oneliner'>{html.escape(card['oneliner'])}</div>"
             f"<div class='feature-why'>{html.escape(card['why'])}</div>"
-            f"{render_prompt_block(card['prompt'], ident)}"
+            f"{prompt_html}"
+            "</div>"
+        )
+    return "".join(rendered)
+
+
+def render_agent_md_additions(cards: list[dict[str, str]]) -> str:
+    rendered = []
+    for idx, card in enumerate(cards):
+        block_text = f"Add under a {card['section']} section in AGENTS.md\n\n{card['text']}"
+        rendered.append(
+            "<div class='config-item'>"
+            f"<input type='checkbox' id='config-{idx}' class='config-checkbox' checked data-text=\"{html.escape(block_text, quote=True)}\">"
+            f"<label for='config-{idx}'>"
+            f"<code class='config-code'>{html.escape(card['text'])}</code>"
+            f"<button class='copy-btn' onclick='copyConfigItem({idx}, this)'>Copy</button>"
+            "</label>"
+            f"<div class='config-why'>{html.escape(card['why'])}</div>"
             "</div>"
         )
     return "".join(rendered)
@@ -1149,12 +1375,15 @@ def render_pattern_cards(cards: list[dict[str, str]], prefix: str) -> str:
     rendered = []
     for idx, card in enumerate(cards, start=1):
         ident = f"{prefix}-{idx}"
+        prompt_html = ""
+        if card.get("prompt"):
+            prompt_html = render_prompt_block(card["prompt"], ident, "Paste into Codex")
         rendered.append(
             "<div class='pattern-card'>"
             f"<div class='pattern-title'>{html.escape(card['title'])}</div>"
             f"<div class='pattern-summary'>{html.escape(card['summary'])}</div>"
             f"<div class='pattern-detail'>{html.escape(card['detail'])}</div>"
-            f"{render_prompt_block(card['prompt'], ident)}"
+            f"{prompt_html}"
             "</div>"
         )
     return "".join(rendered)
@@ -1219,7 +1448,11 @@ def render_session_rows(enriched_sessions: list[EnrichedSession]) -> str:
     return "".join(rows)
 
 
-def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str, dict[str, Any]]:
+def build_report(
+    summaries: list[SessionSummary],
+    output_dir: Path,
+    synthesis_override: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
     sessions = sorted(summaries, key=lambda item: item.start_time)
     session_count = len(sessions)
     if not sessions:
@@ -1269,6 +1502,7 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
 
     duration_order = sorted(duration_by_repo.items(), key=lambda item: item[1], reverse=True)
     preferred_top_repo = next((repo for repo, _ in duration_order if repo not in GENERIC_REPOS), None)
+    satisfaction_counter, helpfulness_counter = build_satisfaction_counts(enriched_sessions)
     project_area_cards = project_areas(enriched_sessions)
     usage_paragraphs = usage_narrative(
         enriched_sessions,
@@ -1280,6 +1514,7 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
         total_final,
         delegated_sessions,
     )
+    usage_paragraphs.append(satisfaction_summary(satisfaction_counter, helpfulness_counter))
     glance = at_a_glance(
         goal_counter,
         friction_counter,
@@ -1291,11 +1526,19 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
     )
     big_wins = build_big_wins(enriched_sessions)
     friction_sections = build_friction_sections(enriched_sessions)
-    feature_cards = build_feature_cards(
+    agent_md_additions = build_agent_md_additions(
         total_errors,
         total_pushes,
         total_commits,
         total_corrections,
+        github_app_sessions,
+        plan_sessions,
+        delegated_sessions,
+    )
+    feature_cards = build_product_feature_cards(
+        total_corrections,
+        github_app_sessions,
+        plan_sessions,
         delegated_sessions,
     )
     pattern_cards = build_pattern_cards(goal_counter, command_counter, repo_counter)
@@ -1308,6 +1551,19 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
         f"<div class='stat'><div class='stat-value'>{format_int(len(active_days))}</div><div class='stat-label'>Days</div></div>"
         f"<div class='stat'><div class='stat-value'>{(total_messages / max(1, len(active_days))):.1f}</div><div class='stat-label'>Msgs/Day</div></div>"
     )
+
+    default_synthesis = {
+        "at_a_glance": glance,
+        "usage_paragraphs": usage_paragraphs,
+        "big_wins": big_wins,
+        "friction_sections": friction_sections,
+        "agent_md_additions": agent_md_additions,
+        "feature_cards": feature_cards,
+        "pattern_cards": pattern_cards,
+        "horizon_cards": horizon_cards,
+        "feedback_cards": feedback_cards,
+    }
+    effective_synthesis = merge_synthesis(default_synthesis, synthesis_override)
 
     report_context = {
         "session_count": session_count,
@@ -1332,9 +1588,62 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
         "top_command": command_counter.most_common(1)[0][0] if command_counter else "n/a",
         "goal_categories": dict(goal_counter.most_common()),
         "friction_categories": dict(friction_counter.most_common()),
-        "at_a_glance": glance,
+        "user_satisfaction_counts": dict(satisfaction_counter.most_common()),
+        "codex_helpfulness_counts": dict(helpfulness_counter.most_common()),
+        "at_a_glance": effective_synthesis["at_a_glance"],
+        "synthesis_mode": "codex" if synthesis_override else "deterministic",
         "output_dir": str(output_dir),
     }
+
+    evidence_bundle = {
+        "manifest": report_context,
+        "project_areas": project_area_cards,
+        "top_tools": list(tool_counter.most_common(12)),
+        "top_commands": list(command_counter.most_common(12)),
+        "top_failures": list(failure_counter.most_common(12)),
+        "top_goal_categories": list(goal_counter.most_common(12)),
+        "top_friction_categories": list(friction_counter.most_common(12)),
+        "recent_sessions": [session_evidence(enriched) for enriched in list(reversed(enriched_sessions[-12:]))],
+        "win_candidates": [
+            session_evidence(enriched)
+            for enriched in sorted(enriched_sessions, key=win_score, reverse=True)[:8]
+        ],
+        "friction_examples": [
+            session_evidence(enriched)
+            for enriched in sorted(
+                [item for item in enriched_sessions if sum(item.friction_counts.values()) > 0],
+                key=lambda item: sum(item.friction_counts.values()),
+                reverse=True,
+            )[:8]
+        ],
+        "product_examples": {
+            "plan_sessions": [
+                session_evidence(enriched)
+                for enriched in enriched_sessions
+                if enriched.session.uses_update_plan
+            ][:5],
+            "subagent_sessions": [
+                session_evidence(enriched)
+                for enriched in enriched_sessions
+                if enriched.session.uses_subagents
+            ][:5],
+            "github_connector_sessions": [
+                session_evidence(enriched)
+                for enriched in enriched_sessions
+                if enriched.session.uses_github_app
+            ][:5],
+        },
+        "candidate_sections": default_synthesis,
+    }
+    synth_glance = effective_synthesis["at_a_glance"]
+    synth_usage = effective_synthesis["usage_paragraphs"]
+    synth_wins = effective_synthesis["big_wins"]
+    synth_friction = effective_synthesis["friction_sections"]
+    synth_agent_md_additions = effective_synthesis["agent_md_additions"]
+    synth_features = effective_synthesis["feature_cards"]
+    synth_patterns = effective_synthesis["pattern_cards"]
+    synth_horizon = effective_synthesis["horizon_cards"]
+    synth_feedback = effective_synthesis["feedback_cards"]
 
     html_body = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1383,6 +1692,17 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
     .friction-desc {{ font-size: 13px; color: #7f1d1d; margin-bottom: 10px; }}
     .friction-examples {{ margin: 0 0 0 20px; font-size: 13px; color: #334155; }}
     .friction-examples li {{ margin-bottom: 4px; }}
+    .config-section {{ background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 20px; }}
+    .config-section h3 {{ font-size: 14px; font-weight: 600; color: #1e40af; margin: 0 0 12px 0; }}
+    .config-actions {{ margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #dbeafe; }}
+    .copy-all-btn {{ background: #2563eb; color: white; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-weight: 500; transition: all 0.2s; }}
+    .copy-all-btn:hover {{ background: #1d4ed8; }}
+    .copy-all-btn.copied {{ background: #16a34a; }}
+    .config-item {{ display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 0; border-bottom: 1px solid #dbeafe; }}
+    .config-item:last-child {{ border-bottom: none; }}
+    .config-checkbox {{ margin-top: 2px; }}
+    .config-code {{ background: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #1e40af; border: 1px solid #bfdbfe; font-family: monospace; display: block; white-space: pre-wrap; word-break: break-word; flex: 1; }}
+    .config-why {{ font-size: 12px; color: #64748b; width: 100%; padding-left: 24px; margin-top: 4px; }}
     .features-section, .patterns-section {{ display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }}
     .feature-card {{ background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; }}
     .pattern-card {{ background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 8px; padding: 16px; }}
@@ -1436,10 +1756,10 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
     <div class="at-a-glance">
       <div class="glance-title">At a Glance</div>
       <div class="glance-sections">
-        <div class="glance-section"><strong>What's working:</strong> {html.escape(glance['working'])} <a href="#section-wins" class="see-more">Impressive Things You Did →</a></div>
-        <div class="glance-section"><strong>What's hindering you:</strong> {html.escape(glance['hindering'])} <a href="#section-friction" class="see-more">Where Things Go Wrong →</a></div>
-        <div class="glance-section"><strong>Quick wins to try:</strong> {html.escape(glance['quick_wins'])} <a href="#section-features" class="see-more">Features to Try →</a></div>
-        <div class="glance-section"><strong>Ambitious workflows:</strong> {html.escape(glance['ambitious'])} <a href="#section-horizon" class="see-more">On the Horizon →</a></div>
+        <div class="glance-section"><strong>What's working:</strong> {html.escape(synth_glance['working'])} <a href="#section-wins" class="see-more">Impressive Things You Did →</a></div>
+        <div class="glance-section"><strong>What's hindering you:</strong> {html.escape(synth_glance['hindering'])} <a href="#section-friction" class="see-more">Where Things Go Wrong →</a></div>
+        <div class="glance-section"><strong>Quick wins to try:</strong> {html.escape(synth_glance['quick_wins'])} <a href="#section-features" class="see-more">Features to Try →</a></div>
+        <div class="glance-section"><strong>Ambitious workflows:</strong> {html.escape(synth_glance['ambitious'])} <a href="#section-horizon" class="see-more">On the Horizon →</a></div>
       </div>
     </div>
 
@@ -1461,8 +1781,7 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
 
     <h2 id="section-usage">How You Use Codex</h2>
     <div class="narrative">
-      <p>{html.escape(usage_paragraphs[0])}</p>
-      <p>{html.escape(usage_paragraphs[1])}</p>
+      {render_paragraphs(synth_usage)}
     </div>
 
     <div class="charts-row">
@@ -1487,28 +1806,47 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
       </div>
     </div>
 
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">User Satisfaction</div>
+        {bar_rows(satisfaction_counter, "#eab308", limit=4)}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Codex Helpfulness</div>
+        {bar_rows(helpfulness_counter, "#6366f1", limit=5)}
+      </div>
+    </div>
+
     <h2 id="section-wins">Impressive Things You Did</h2>
     <p class="section-intro">A few standout sessions where the logs show sustained throughput, persistence, or a high amount of real delivery work.</p>
-    <div class="big-wins">{render_big_wins(big_wins)}</div>
+    <div class="big-wins">{render_big_wins(synth_wins)}</div>
 
     <h2 id="section-friction">Where Things Go Wrong</h2>
     <p class="section-intro">These categories are heuristic, but they line up with the dominant failure patterns in the local session logs.</p>
-    <div class="friction-categories">{render_friction_categories(friction_sections)}</div>
+    <div class="friction-categories">{render_friction_categories(synth_friction)}</div>
 
-    <h2 id="section-features">Features to Try</h2>
-    <p class="section-intro">Concrete workflow changes that fit the actual shape of your Codex sessions.</p>
-    <div class="features-section">{render_feature_cards(feature_cards, 'feature')}</div>
+    <h2 id="section-features">Existing Codex Features to Try</h2>
+    <div class="config-section">
+      <h3>Suggested AGENTS.md Additions</h3>
+      <p class="section-intro">Just copy this into your Codex instructions file to make the recurring patterns explicit.</p>
+      <div class="config-actions">
+        <button class="copy-all-btn" onclick="copyAllCheckedConfig(this)">Copy All Checked</button>
+      </div>
+      {render_agent_md_additions(synth_agent_md_additions)}
+    </div>
+    <p class="section-intro">Built-in Codex capabilities that fit the actual shape of your sessions.</p>
+    <div class="features-section">{render_feature_cards(synth_features, 'feature')}</div>
 
-    <h2 id="section-patterns">New Usage Patterns</h2>
+    <h2 id="section-patterns">New Ways to Use Codex</h2>
     <p class="section-intro">Stable patterns showing up across the corpus, with prompts you can reuse directly.</p>
-    <div class="patterns-section">{render_pattern_cards(pattern_cards, 'pattern')}</div>
+    <div class="patterns-section">{render_pattern_cards(synth_patterns, 'pattern')}</div>
 
     <h2 id="section-horizon">On the Horizon</h2>
-    <div class="horizon-section">{render_horizon_cards(horizon_cards)}</div>
+    <div class="horizon-section">{render_horizon_cards(synth_horizon)}</div>
 
     <h2 id="section-feedback">Team Feedback</h2>
     <p class="feedback-intro">Notes this corpus suggests for the Codex product and for future scaffold improvements.</p>
-    <div class="feedback-section">{render_feedback_cards(feedback_cards)}</div>
+    <div class="feedback-section">{render_feedback_cards(synth_feedback)}</div>
 
     <h2>Recent Sessions</h2>
     <p class="section-intro">Most recent sessions first. Open one to see the derived goal, outcome, and friction summary.</p>
@@ -1526,9 +1864,11 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
     </div>
   </div>
   <script>
-    function copyPrompt(id, button) {{
-      const text = document.getElementById(id).innerText;
+    function copyTextValue(text, button) {{
       navigator.clipboard.writeText(text).then(() => {{
+        if (!button) {{
+          return;
+        }}
         const old = button.innerText;
         button.innerText = 'Copied';
         button.classList.add('copied');
@@ -1538,11 +1878,27 @@ def build_report(summaries: list[SessionSummary], output_dir: Path) -> tuple[str
         }}, 1200);
       }});
     }}
+
+    function copyPrompt(id, button) {{
+      const text = document.getElementById(id).innerText;
+      copyTextValue(text, button);
+    }}
+
+    function copyConfigItem(index, button) {{
+      const input = document.getElementById(`config-${{index}}`);
+      copyTextValue(input.dataset.text, button);
+    }}
+
+    function copyAllCheckedConfig(button) {{
+      const checked = Array.from(document.querySelectorAll('.config-checkbox:checked'));
+      const text = checked.map((item) => item.dataset.text).join('\\n\\n');
+      copyTextValue(text, button);
+    }}
   </script>
 </body>
 </html>
 """
-    return html_body, report_context
+    return html_body, report_context, evidence_bundle
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -1565,6 +1921,12 @@ def main() -> None:
         if args.output_dir
         else resolved_codex_home / "usage-data"
     )
+    evidence_path = (
+        Path(args.evidence_file).expanduser()
+        if args.evidence_file
+        else output_dir / "analysis-input.json"
+    )
+    synthesis_path = Path(args.synthesis_file).expanduser() if args.synthesis_file else None
     session_meta_dir = output_dir / "session-meta"
     facets_dir = output_dir / "facets"
     session_meta_dir.mkdir(parents=True, exist_ok=True)
@@ -1597,12 +1959,28 @@ def main() -> None:
         write_json(session_meta_dir / f"{summary.output_key}.json", asdict(summary))
         write_json(facets_dir / f"{summary.output_key}.json", build_facets(summary))
 
-    report_html, manifest = build_report(summaries, output_dir)
-    (output_dir / "report.html").write_text(report_html, encoding="utf-8")
+    synthesis_override = None
+    if synthesis_path is not None:
+        if not synthesis_path.exists():
+            raise SystemExit(f"Synthesis file does not exist: {synthesis_path}")
+        synthesis_override = json.loads(synthesis_path.read_text(encoding="utf-8"))
+
+    report_html, manifest, evidence_bundle = build_report(summaries, output_dir, synthesis_override)
     write_json(output_dir / "manifest.json", manifest)
+    write_json(evidence_path, evidence_bundle)
+
+    if args.extract_only:
+        print(f"Analyzed {len(summaries)} sessions")
+        print(f"Evidence: {evidence_path}")
+        print(f"Session metadata: {session_meta_dir}")
+        print(f"Facets: {facets_dir}")
+        return
+
+    (output_dir / "report.html").write_text(report_html, encoding="utf-8")
 
     print(f"Analyzed {len(summaries)} sessions")
     print(f"Report: {output_dir / 'report.html'}")
+    print(f"Evidence: {evidence_path}")
     print(f"Session metadata: {session_meta_dir}")
     print(f"Facets: {facets_dir}")
 
