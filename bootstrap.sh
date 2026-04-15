@@ -45,7 +45,8 @@ info "Starship prompt"
 if command -v starship &>/dev/null; then
   ok "starship already installed"
 else
-  curl -sS https://starship.rs/install.sh | sh -s -- -y
+  mkdir -p "$HOME/.local/bin"
+  curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"
   ok "starship installed"
 fi
 
