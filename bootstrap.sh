@@ -63,7 +63,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # 5. Cargo-installable CLI tools
-#    bat, eza, fd, ripgrep, zoxide, delta, yazi, zellij, sccache
+#    bat, eza, fd, ripgrep, zoxide, delta, zellij, sccache
 # ---------------------------------------------------------------------------
 declare -A CARGO_BINS=(
   [bat]="bat"
@@ -74,7 +74,6 @@ declare -A CARGO_BINS=(
   [delta]="git-delta"
   [sccache]="sccache"
   [zellij]="zellij"
-  [yazi]="yazi-fm"
 )
 
 info "Cargo CLI tools"
@@ -87,6 +86,16 @@ for bin in "${!CARGO_BINS[@]}"; do
     ok "$bin installed"
   fi
 done
+
+# Yazi requires its own build wrapper
+info "yazi"
+if command -v yazi &>/dev/null; then
+  ok "yazi already installed"
+else
+  cargo install --force yazi-build
+  yazi-build
+  ok "yazi installed"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. fzf (git install -- prebuilt binary)
