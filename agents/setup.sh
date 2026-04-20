@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="$SCRIPT_DIR/agents"
+SOURCE_DIR="$SCRIPT_DIR"
 CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
 CLAUDE_SETTINGS_SRC="$SOURCE_DIR/claude-settings.json"
 CLAUDE_STATUSLINE_SRC="$SOURCE_DIR/statusline-command.sh"
