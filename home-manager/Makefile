@@ -81,9 +81,9 @@ home: backup check ## Apply home configuration (ishandhanani@macbook)
 vm: backup check ## Apply VM configuration (auto-detects user)
 	@echo "$(BLUE)==> Applying VM configuration...$(NC)"
 	@if [ "$(USERNAME)" = "nvidia" ]; then \
-		nix run home-manager/master -- switch --flake ./home-manager#brev-vm-gpu -b backup; \
+		nix run home-manager/master -- switch --flake .#brev-vm-gpu -b backup; \
 	else \
-		nix run home-manager/master -- switch --flake ./home-manager#brev-vm -b backup; \
+		nix run home-manager/master -- switch --flake .#brev-vm -b backup; \
 	fi
 	@echo "$(GREEN)✓ VM configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
