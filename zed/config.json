@@ -1,0 +1,33 @@
+// Zed keymap — ported from Cursor
+//
+// Docs: https://zed.dev/docs/key-bindings
+// To see defaults, run `zed: open default keymap` from the command palette.
+[
+  // Cursor cmd+i / cmd+l → Zed agent panel.
+  // Bound in Editor too so the editor's default cmd-l (SelectLine) doesn't shadow us.
+  {
+    "context": "Workspace || Editor",
+    "bindings": {
+      "cmd-i": "agent::Toggle",
+      "cmd-l": "agent::Toggle",                  // open if closed, close if open
+      "cmd-shift-l": "agent::NewThread",         // start a new chat
+      "cmd-y cmd-t": "workspace::SaveWithoutFormat"
+    }
+  },
+
+  // Vim normal-mode g-prefix bindings (ported from vim.normalModeKeyBindingsNonRecursive)
+  {
+    "context": "vim_mode == normal",
+    "bindings": {
+      "g r": "editor::FindAllReferences",       // goToReferences
+      "g n": "editor::Rename",                  // rename
+      "g i": "editor::GoToImplementation",      // goToImplementation
+      "g e": "pane::GoBack",                    // closest to navigateToLastEditLocation
+      "g p": "editor::ShowSignatureHelp",       // triggerParameterHints
+      "g m": "editor::GoToDiagnostic",          // marker.next
+      "g y": "editor::CopyPermalinkToLine"      // gitlens copyRemoteFileUrlToClipboard
+      // "g t": run nearest Go test — needs a Zed task; see tasks.json
+    }
+  }
+]
+
