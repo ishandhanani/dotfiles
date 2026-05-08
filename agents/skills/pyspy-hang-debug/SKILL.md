@@ -1,164 +1,222 @@
 ---
 name: pyspy-hang-debug
-description: Diagnose hung Python processes (esp. SGLang/vLLM scheduler workers) on a SLURM cluster using py-spy dumps. Captures Python + native stack traces from every scheduler rank to attribute deadlocks, infinite loops, and NCCL collective stalls. Use when an inference server has stopped logging but its SLURM job is still RUNNING, or aiperf/load-gen reports timeouts while the engine appears alive.
+description: Diagnose hung or stalled Python processes using py-spy. Captures live Python and native (C/C++) stack traces from one or more PIDs without restarting the process — works for local processes, processes inside containers, and processes inside SLURM jobs. Use when a Python process has stopped emitting output but is still alive, when distributed workers appear deadlocked, or when you need to attribute a stall to NCCL / mutexes / pure Python work for an upstream bug report.
 user-invocable: true
 ---
 
-# py-spy Hang Debug for SLURM Inference Workers
+# py-spy Hang Debug
 
-When an inference server's worker process stops logging but the SLURM job is still `RUNNING`, the engine is almost certainly hung. py-spy gives you the live Python stack traces from every rank without restarting the job, and `--native` adds the C/C++ frames so you can attribute the hang to NCCL, CUDA, libc mutexes, or pure Python work.
+py-spy reads the live stack of a running CPython process and prints it without attaching a debugger or stopping the process. It's the right tool when:
 
-This skill is the canonical workflow for diagnosing those hangs on SLURM clusters where the worker runs inside a container with a read-only `/home` and `/usr` (PEP 668-managed Python). The pattern is what we used to attribute hisparse + dp-attention deadlocks on sa-b200.
+- A Python process has stopped logging but is still alive
+- A distributed worker (multi-process, multi-rank) appears deadlocked
+- A long-running task is "slow" and you want to know what it's actually doing
+- You need stack-level evidence to file an upstream bug
+
+This skill walks the full diagnostic flow: confirm the hang, install py-spy in whatever environment the process lives in, capture both Python-only and `--native` (Python + C/C++) traces, and read the output.
 
 ## When to use
 
-- An inference job has been allocated and started but the worker log (`*_agg_w0.out`, `*_prefill_w0.out`, etc.) hasn't written a new line in N minutes
-- aiperf / your load gen reports `TimeoutError`, `request timed out`, `deadline has elapsed`, or progress stuck at warmup
-- `sacct`/`squeue` shows the job as `RUNNING` (not failed, not killed)
-- You need to file an upstream bug and want stack-level evidence
+- A process you can identify by PID hasn't emitted log output in N minutes
+- A multi-rank job (DP/TP workers in SGLang/vLLM, MPI ranks, multiprocessing pools) reports timeouts upstream while the workers are still alive
+- A task is hot on CPU but never returns
+- A non-deterministic hang you want to attribute, not just kill-and-retry
 
 ## When NOT to use
 
-- The job has already exited — py-spy needs a live process. Look at logs instead.
-- A single quick `ps`/`top` shows the worker isn't even there — it crashed; check stderr / SLURM step exit codes.
-- The process is doing slow but useful work. Watch the worker log for one minute first; only call it hung if it stops emitting lines.
+- The process has already exited — py-spy needs a live PID. Look at logs / core dumps instead.
+- The process is doing slow but useful work. Tail the log for one minute first; only call it hung if it stops emitting output.
+- You don't have permission to read the target process. py-spy needs `ptrace` access (same UID, or root, or `CAP_SYS_PTRACE`). On hardened hosts you'll get `Permission Denied` and need sudo.
 
 ## Step 1 — confirm the hang
 
-Don't py-spy a healthy process. Verify two things:
+Don't py-spy a healthy process. Verify the symptom:
 
+- Last log line timestamp is materially older than the polling cadence the process should have
+- The PID is still alive (`ps -p <pid>`)
+- For SLURM jobs: `squeue -j <jobid>` shows `R` (running), not `CG` (completing) or `PD` (pending)
+
+If all three hold, you have a hang.
+
+## Step 2 — install py-spy
+
+Pick the path that matches your environment.
+
+**Local / your dev box:**
 ```bash
-ssh <cluster> 'squeue -j <jobid> 2>&1 | tail -2'
-ssh <cluster> 'ls -la /path/to/logs/*_agg_w0.out; tail -3 /path/to/logs/*_agg_w0.out'
+pip install py-spy        # or: cargo install py-spy
 ```
 
-Note the timestamp on the last log line. If it's >5 minutes old and the SLURM job is still `R`, you have a hang.
-
-## Step 2 — install py-spy inside the container
-
-The cluster's container typically has read-only `/home` (root-owned) and `/usr` (PEP 668), so the obvious `pip install py-spy` fails. Install to `/tmp` instead:
-
+**Inside a venv that the target process uses:**
 ```bash
-ssh <cluster> "srun --jobid <jobid> -w <node> --overlap bash -c '
-PYTHONUSERBASE=/tmp/pyspy pip install --break-system-packages --quiet py-spy 2>&1 | tail -3
-ls /tmp/pyspy/bin/py-spy
-'"
+<venv>/bin/pip install py-spy
 ```
 
-The binary lands at `/tmp/pyspy/bin/py-spy`. It survives until the SLURM step exits.
-
-> **Note on flags.** `--break-system-packages` is needed because the container marks the system Python as PEP 668 externally-managed. `PYTHONUSERBASE=/tmp/pyspy` redirects the user-site install to a writable dir (the default `/home/$USER/.local` is root-owned in this container). Don't drop either flag.
-
-## Step 3 — find the worker PIDs
-
-For SGLang: each DP/TP rank runs as its own process named `sglang::scheduler_DP<n>_TP<n>_EP<n>`. For vLLM you'd grep for `vllm` worker names; for TRT-LLM, `mpirun`/`tritonserver`.
-
+**Inside a container with read-only `/home` and PEP 668-managed system Python** (common in inference-serving containers):
 ```bash
-ssh <cluster> "srun --jobid <jobid> -w <node> --overlap bash -c '
-pgrep -af sglang::scheduler
-'"
+PYTHONUSERBASE=/tmp/pyspy pip install --break-system-packages --quiet py-spy
+# binary lands at /tmp/pyspy/bin/py-spy
 ```
 
-Note all PIDs. For DP=8 / TP=8 you should see 8 schedulers.
+The `--break-system-packages` flag bypasses the PEP 668 marker that says "don't touch the system Python." `PYTHONUSERBASE=/tmp/pyspy` redirects the user-site install to a writable directory (the default `~/.local` is often root-owned in containers).
 
-## Step 4 — basic dump (Python frames only)
+**No internet inside the container:**
+Either pre-build a static py-spy binary on a connected host (`cargo build --release --target x86_64-unknown-linux-musl`) and `scp` it in, or wrap the container with one that has py-spy preinstalled.
 
-Quick first pass to see Python-level state:
+## Step 3 — get into the right shell
+
+You need a shell that can `ptrace` the target PID. The kernel rule: same UID, or root/`CAP_SYS_PTRACE`.
+
+**Local same-user process:** just open a terminal.
+
+**Process inside a container started by you:** `docker exec -it <name> bash` or `enroot exec <name> bash`.
+
+**Process inside a SLURM job:**
+```bash
+srun --jobid <jobid> -w <node> --overlap --pty bash
+# or non-interactively for one command:
+srun --jobid <jobid> -w <node> --overlap bash -c '<command>'
+```
+
+`--overlap` is critical — it lets you attach a new step to an existing job without claiming new resources. Without it the new srun will queue or fail.
+
+**Process inside a SLURM-allocated container:** the `srun --overlap` step lands you inside the same container the workers run in. No additional `enroot exec` needed.
+
+## Step 4 — find the PIDs
+
+Common patterns:
+
+| Workload | How to enumerate |
+|---|---|
+| SGLang scheduler workers | `pgrep -af sglang::scheduler` (one PID per DP/TP/EP rank) |
+| vLLM workers | `pgrep -af vllm` |
+| MPI ranks | `pgrep -af your-binary` |
+| Single Python process | `pgrep -af python` |
+| Anything you launched | `ps -ef | grep <name>` |
+
+For multi-rank deadlocks you almost always want **all** ranks. Capture the PID list before dumping:
 
 ```bash
-ssh <cluster> "srun --jobid <jobid> -w <node> --overlap bash -c '
-for pid in \$(pgrep -f sglang::scheduler); do
-  echo === PID \$pid ===
-  /tmp/pyspy/bin/py-spy dump --pid \$pid 2>&1 | head -25
+PIDS=$(pgrep -f sglang::scheduler)
+echo "$PIDS"
+```
+
+## Step 5 — basic dump (Python frames only)
+
+Quick first pass. Tells you which Python function each rank is executing right now:
+
+```bash
+for pid in $PIDS; do
+  echo "=== PID $pid ==="
+  /tmp/pyspy/bin/py-spy dump --pid $pid 2>&1 | head -25
   echo
 done
-'"
 ```
 
-What to look for:
+Read the output. Each thread shows as `Thread <tid> (active|idle): "name"` followed by frames innermost-first.
 
-- **Different ranks in different collectives** → classic NCCL ordering deadlock. Two distinct call paths both ending in `all_gather_into_tensor` mean both are waiting for everyone, neither completes. Example we hit on sa-b200: 7 ranks in `prefill_delayer.all_gather`, 1 rank in `dp_attn.prepare_mlp_sync_batch.all_gather`. Both wait forever.
-- **One rank `active+gil`, others `idle` in a collective** → the active rank isn't reaching the sync barrier. Either it has work the others don't (look at scheduler decision logic), or it's stuck in a CPU-bound loop. Capture `--native` next to find out which.
-- **All ranks in the same collective and `idle`** → almost always a NCCL/network problem at the wire level (lost packet, bad NIC, fabric misconfig). Look at NCCL env (`NCCL_DEBUG=INFO`), check `dmesg` for hardware events.
-- **All ranks in `event_loop_overlap` doing useful Python work** → not a hang; just slow. Watch a few seconds before declaring it stuck.
+Common patterns and what they mean:
 
-## Step 5 — native dump (Python + C/C++ frames)
+- **All ranks in the same `all_gather` / `broadcast` / collective and `idle`** → the collective is genuinely waiting at the network layer. Often a NCCL or wire-level issue. Next step: `NCCL_DEBUG=INFO`, `dmesg`, fabric checks.
+- **Different ranks in DIFFERENT collectives, all `idle`** → classic NCCL ordering deadlock. Two distinct call paths both ending in `all_gather`/etc., each waiting for everyone, neither completes. Look at the divergent Python call paths above the collective; the bug is whichever code branch decided to enter a different collective on a subset of ranks.
+- **One rank `active+gil`, others `idle` in a collective** → the active rank is busy and never reaches the sync. Either it has work the others don't, or it's stuck in a CPU-bound loop. Capture `--native` next to find out which.
+- **All ranks `active+gil` in different non-collective code** → not necessarily a hang; might just be slow. Take a second dump 30 seconds later and diff. If they're in the same frames, it's hung. If they advance, it's just slow.
 
-When step 4 shows a rank stuck in pure Python work without an obvious cause, or you need to attribute below the Python layer (NCCL state, mutex wait, CUDA driver call), use `--native`:
+## Step 6 — native dump (Python + C/C++ frames)
+
+When step 5 shows a rank stuck in pure Python without an obvious cause, or you need to attribute below the Python layer (NCCL state, mutex wait, CUDA driver call, syscall), use `--native`. It interleaves C/C++/libc frames into the Python trace.
 
 ```bash
-ssh <cluster> "srun --jobid <jobid> -w <node> --overlap bash -c '
-mkdir -p /path/to/logs/pyspy
-for pid in \$(pgrep -f sglang::scheduler); do
-  out=/path/to/logs/pyspy/dump_native_\$pid.txt
-  echo Dumping \$pid -\\> \$out
-  /tmp/pyspy/bin/py-spy dump --native --pid \$pid > \$out 2>&1
+mkdir -p /path/to/save/pyspy
+for pid in $PIDS; do
+  out=/path/to/save/pyspy/dump_native_$pid.txt
+  echo "Dumping $pid -> $out"
+  /tmp/pyspy/bin/py-spy dump --native --pid $pid > $out 2>&1
 done
-ls -la /path/to/logs/pyspy/
-'"
 ```
 
-Save to lustre (`/path/to/logs/pyspy/`) so the dumps survive the job, are attachable to upstream bug reports, and show up in your archive.
+Save to a durable path (not `/tmp` if you want the dumps to survive the container/job). For SLURM jobs, save under the job's output dir on shared storage so the dumps outlive the allocation.
 
-What `--native` adds:
+**What `--native` reveals.** Compare two stuck ranks:
 
+A rank genuinely waiting on a NCCL collective:
 ```
-Process 117489: sglang::scheduler_DP3_TP3_EP3
-Thread 117489 (idle): "MainThread"
-    pthread_cond_wait (libc.so.6)                   ← genuinely blocked on mutex
+Thread (idle): "MainThread"
+    pthread_cond_wait (libc.so.6)                          ← blocked on mutex
     std::condition_variable::wait (libstdc++.so.6.0.33)
-    0x7caaa50b1a9b (?)                              ← unsymbolized C++ (NCCL)
+    0x7caaa50b1a9b (?)                                     ← unsymbolized C++ (NCCL)
     all_gather_into_tensor (torch/distributed/distributed_c10d.py:4193)
-    prepare_mlp_sync_batch_raw (scheduler_dp_attn_mixin.py:202)
-    ...
+    <python frames above>
 ```
 
-vs. a "stuck in Python" rank:
-
+A rank busy in pure Python:
 ```
-Thread 117492 (active+gil): "MainThread"
-    init_next_round_input (schedule_batch.py:989)   ← deepest Python frame
-    _get_new_batch_prefill_raw (scheduler.py:2700)
-    ...
-    0x7fdc6442a1ca (libc.so.6)                       ← Python interpreter, not blocking
+Thread (active+gil): "MainThread"
+    init_next_round_input (some_module.py:989)             ← deepest Python frame
+    <python frames above>
+    0x7fdc6442a1ca (libc.so.6)                             ← CPython interpreter, NOT blocking
 ```
 
-The first is genuinely waiting in NCCL. The second is **busy in Python with the GIL held** — no syscall, no mutex, just running. That's how you confirm "infinite loop in init_next_round_input" vs "blocked on collective".
+The first is genuinely waiting in NCCL via libc's `pthread_cond_wait`. The second is **busy in Python with the GIL held** — no syscall, no mutex, just running. That's how you separate "stuck on a collective" from "stuck in an infinite Python loop."
 
-## Step 6 — make sense of the picture
+Other native frames worth recognizing:
 
-For an N-rank deadlock, you almost always want to see all N traces side by side. Standard patterns:
+- `pthread_cond_wait`, `futex_wait` → blocked on a mutex/semaphore
+- `clock_nanosleep`, `nanosleep` → sleeping
+- `epoll_wait`, `poll`, `select` → waiting on I/O
+- `recvmsg`, `read`, `write` → in a syscall, possibly waiting on the kernel
+- `cuLaunchKernel`, `cudaStreamSynchronize` → inside CUDA driver
+- `_PyEval_EvalFrameDefault` → CPython interpreter executing Python (so the Python frames above are real)
+- `0x...... (?)` → unsymbolized C/C++; usually means a closed-source or stripped binary (NCCL is the common one)
 
-| Pattern | Meaning | Where to look |
+## Step 7 — make sense of multi-rank deadlocks
+
+For a deadlock across N ranks, lay all N traces out side by side. Patterns:
+
+| Pattern | Meaning | Action |
 |---|---|---|
-| All ranks in same `all_gather`, all `idle` + `pthread_cond_wait` | NCCL collective stalled at network layer | NCCL logs, `nvidia-smi nvlink -s`, fabric diagnostics |
-| 7 ranks in collective A, 1 rank in collective B | Different call ordering across ranks → ordering deadlock | The two distinct Python call paths above each `all_gather_into_tensor` |
-| 7 ranks in collective, 1 rank `active+gil` in pure Python | The CPU-bound rank never reaches the sync | Bottom Python frame on the busy rank — that's the bug location |
-| All ranks `active+gil` in different non-collective code | Not a deadlock; just slow / progressing | Run a second dump 30s later and diff |
+| All ranks in same collective, all `pthread_cond_wait` under it | NCCL stalled at network/wire | NCCL logs, fabric / NIC checks |
+| 7 ranks in collective A, 1 rank in collective B | Different call ordering across ranks | Find the divergent code path; one branch picks a different collective |
+| 7 ranks in collective + `pthread_cond_wait`, 1 rank `active+gil` in pure Python | The CPU-bound rank never reaches the sync | Bottom Python frame on the busy rank — that's the bug location |
+| All ranks `active+gil`, different frames | Not deadlocked; check progress | Second dump 30s later; diff |
 
-## Step 7 — file the report
+## Step 8 — file the report
 
-Once you've attributed the hang, the dumps in `/path/to/logs/pyspy/` are your evidence. Useful upstream-report content:
+Once you've attributed the hang, the dumps are your evidence. A useful upstream issue includes:
 
-- Job config (which flags are set: `enable-hisparse`, `enable-dp-attention`, `enable-prefill-delayer`, etc.)
-- Worker log timestamp of the last activity
-- All N native dumps (they're small, 1-2KB each)
-- The exact deepest frame on the stuck rank (e.g. `schedule_batch.py:989 init_next_round_input`)
-- Whether rerunning without one specific flag avoids the hang (this is how we narrowed down `prefill_delayer` then `hisparse` on sa-b200)
+- The exact deepest Python frame on the stuck rank (e.g. `some_module.py:989 some_function`)
+- Which configuration flags were on (so the maintainer can repro)
+- Whether the hang reproduces 2-for-2 (run it twice; if both hang, it's deterministic enough to file)
+- A flag-bisection if you can: "with flag X off it ran clean; with flag X on it hung again" narrows the suspect code path
+- All N native dumps attached (they're small, 1-2KB each)
 
-## After: cancel the hung job
+## After: don't forget to clean up
+
+If you opened a `srun --pty` session, exit it. If you scancel a SLURM job, do it explicitly — hung jobs sit in the queue eating allocation until the time limit, and SLURM accounting won't mark them failed unless you cancel.
+
+## Reference workflow (for an SGLang / DP-attention deadlock)
+
+End-to-end, copy-paste shape:
 
 ```bash
+# 1. confirm hang
+ssh <cluster> 'squeue -j <jobid>'
+ssh <cluster> 'tail -3 /path/to/logs/*_agg_w0.out; ls -la /path/to/logs/*_agg_w0.out'
+# (last log timestamp >5min old + still RUNNING = hang)
+
+# 2. install + dump in one srun
+ssh <cluster> "srun --jobid <jobid> -w <node> --overlap bash -c '
+  PYTHONUSERBASE=/tmp/pyspy pip install --break-system-packages --quiet py-spy
+  mkdir -p /path/to/logs/pyspy
+  for pid in \$(pgrep -f sglang::scheduler); do
+    /tmp/pyspy/bin/py-spy dump --native --pid \$pid > /path/to/logs/pyspy/dump_native_\$pid.txt 2>&1
+  done
+  ls -la /path/to/logs/pyspy/
+'"
+
+# 3. read the dumps locally
+ssh <cluster> 'cat /path/to/logs/pyspy/dump_native_*.txt' | less
+
+# 4. cancel the hung job
 ssh <cluster> 'scancel <jobid>'
 ```
-
-Don't forget — a hung job sits in the queue eating its allocation until the time limit. The SLURM accounting won't mark it as failed unless you cancel.
-
-## Reference: real attribution from sa-b200
-
-Two failed hisparse runs on the sa-b200 cluster (jobs 16485, 16512):
-
-- **16485:** 7 ranks blocked in `prefill_delayer._gather_info` (one collective), 1 rank blocked in `dp_attn.prepare_mlp_sync_batch` (different collective). Removed `--enable-prefill-delayer` → that race went away.
-- **16512** (after fix): 7 ranks blocked in `dp_attn.prepare_mlp_sync_batch` waiting for everyone. DP6 was `active+gil` in `init_next_round_input (schedule_batch.py:989)` — busy in pure Python, never reaches the barrier. That's the actionable upstream evidence: hisparse changes scheduling such that one rank's `init_next_round_input` doesn't terminate.
-
-Without `--native`, the second case looked indistinguishable from "DP6 just has more work". With `--native`, you can see DP6 is **not** in any syscall or collective — it's a pure-Python hot spot in hisparse code.
