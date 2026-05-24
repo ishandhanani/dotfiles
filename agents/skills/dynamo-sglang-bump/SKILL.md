@@ -270,7 +270,7 @@ Required artifacts:
   - A `_compat.py` deprecation table (one row per removed branch / polyfill / wrapper)
   - An "env deps that surfaced" section if you had to install anything beyond `[diffusion]` (most fresh venvs need `nixl`, `maturin`, plus `pytest pytest-asyncio pytest-benchmark` to run the unit tests — list whatever bit you so the next bumper doesn't relearn it)
 
-Add a row to `~/memory/INDEX.md`. Commit with `dynamo-upgrade-sglang-<ver>: <short description>` (do not push memory).
+Add a row to `~/memory/INDEX.md`. Commit and push memory changes with `dynamo-upgrade-sglang-<ver>: <short description>`.
 
 ## Step 12: PR
 

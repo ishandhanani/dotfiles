@@ -21,7 +21,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - **What to log**: benchmark results, design decisions, implementation milestones, bugs found, key findings. Not routine edits.
 - **Where**: append to the relevant worklog in `~/memory/<project>/`, or create a new file if it's a new topic.
 - **Update frontmatter**: bump `last-updated` in the project INDEX.md.
-- **Commit**: `cd ~/memory && git add -A && git commit -m "<project>: <short description>"`. Do not push.
+- **Commit + push**: `cd ~/memory && git add -A && git commit -m "<project>: <short description>" && git push`. Incremental memory pushes are encouraged; push whenever memory updates are committed.
 
 ## How I Work
 
