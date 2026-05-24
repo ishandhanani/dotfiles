@@ -63,11 +63,10 @@ fi
 
 # ---------------------------------------------------------------------------
 # 5. Cargo-installable CLI tools
-#    bat, eza, fd, ripgrep, zoxide, delta, zellij, sccache
+#    bat, fd, ripgrep, zoxide, delta, zellij, sccache
 # ---------------------------------------------------------------------------
 declare -A CARGO_BINS=(
   [bat]="bat"
-  [eza]="eza"
   [fd]="fd-find"
   [rg]="ripgrep"
   [zoxide]="zoxide"
@@ -221,9 +220,6 @@ alias m="make"
 
 # Tool aliases
 alias cat="bat --style=plain --paging=never"
-alias ls="eza --color=always --group-directories-first"
-alias ll="eza -la --color=always --group-directories-first"
-alias tree="eza --tree"
 
 # Networking
 alias myip="curl -s icanhazip.com"
