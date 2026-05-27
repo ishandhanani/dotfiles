@@ -1,6 +1,6 @@
 ---
 name: server-lifecycle
-description: Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, collect tachometer telemetry, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane.
+description: Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, configure first-class telemetry/observability, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane.
 user-invocable: true
 ---
 
@@ -8,7 +8,7 @@ user-invocable: true
 
 Use `srt-slurm` as the unified control plane for server lifecycle work. YAML is the durable benchmark definition and rendered bash is the execution artifact. Do not maintain a separate hand-written launch script for the same benchmark unless it is temporary local validation glue.
 
-Use this workflow for SGLang/Dynamo/vLLM/TRT-LLM benchmark recipes, local smoke runs, SLURM jobs, `srtctl apply --bash`, AIPerf, and tachometer.
+Use this workflow for SGLang/Dynamo/vLLM/TRT-LLM benchmark recipes, local smoke runs, SLURM jobs, `srtctl apply --bash`, AIPerf, and srt-slurm telemetry.
 
 ## Source Of Truth
 
@@ -23,7 +23,7 @@ Before editing:
 
 ```bash
 git status --short
-rg -n "benchmark:|run_benchmark|apply --bash|lifecycle|tachometer|aiperf" src tests recipes examples
+rg -n "benchmark:|run_benchmark|apply --bash|lifecycle|telemetry|observability|aiperf" src tests recipes examples
 rg --files recipes examples | rg 'sglang|dynamo|vllm|trtllm'
 ```
 
@@ -37,9 +37,44 @@ For benchmark YAMLs:
 - Use `benchmark.type: custom` for inline AIPerf until a first-class benchmark type exists.
 - Keep artifact paths deterministic with `AIPERF_ARTIFACT_DIR`, `--output-artifact-dir`, and `--profile-export-prefix`.
 - Always pass `--ui none`.
-- Usually pass `--no-server-metrics` when tachometer/direct scraping owns telemetry. This avoids SGLang nullable Prometheus metric issues and keeps AIPerf focused on request records.
+- Usually pass `--no-server-metrics` when `srt-slurm` telemetry owns metrics. This avoids SGLang nullable Prometheus metric issues and keeps AIPerf focused on request records.
 - For local shared-node disagg in `srt-slurm`, use the repo's shared-node convention, for example `decode_nodes: 0` when decode shares the prefill node.
 - For SGLang disagg, put connector/backend flags in `backend.sglang_config.prefill` and `.decode` using the repo's schema. Validate with `dry-run`; do not guess unsupported YAML keys.
+
+## Telemetry And Observability
+
+Use first-class `srt-slurm` config. Do not embed raw tachometer/scraper commands in benchmark YAML.
+
+- `telemetry:` is the metrics scraper path. It generates `telemetry_config.toml`, starts DCGM/node exporters, scrapes backend/frontend metrics from the rendered topology, and stores artifacts under `logs/<storage_subdir>`.
+- `observability:` is for OTEL tracing env injection (`enable_otel`, `otel_endpoint`), not metrics scraping.
+- Resolve `container_image`, `dcgm_exporter.container_image`, and `node_exporter.container_image` through `srtslurm.yaml` container aliases when possible.
+
+Telemetry YAML shape:
+
+```yaml
+telemetry:
+  enabled: true
+  container_image: "telemetry-scraper"
+  storage_subdir: "telemetry"
+  default_frequency: 1.0
+  sync_interval_secs: 0
+  dcgm_exporter:
+    container_image: "dcgm-exporter"
+    port: 9401
+  node_exporter:
+    container_image: "node-exporter"
+    port: 9101
+```
+
+Optional OTEL tracing:
+
+```yaml
+observability:
+  enable_otel: true
+  otel_endpoint: "http://<otel-collector>:4317"
+```
+
+For standalone `--bash` lifecycle behavior, use the renderer's built-in telemetry hooks and controls (`SRTCTL_ENABLE_TACHOMETER`, `SRTCTL_REQUIRE_TACHOMETER`, `SRTCTL_TACHOMETER_ARGS`) only when debugging that path. Prefer YAML-level `telemetry:` for normal recipes.
 
 Inline AIPerf command shape:
 
@@ -98,46 +133,13 @@ The rendered bash should handle the lifecycle end to end:
 - Use `setsid` around child launch scripts that trap `kill 0`, such as Dynamo example launchers, so their cleanup cannot kill the parent lifecycle runner.
 - Avoid broad server `pkill`; list candidates first and narrow cleanup to user-owned benchmark processes, known launch scripts, model, or ports.
 - Wait for real readiness. `/health` and `/v1/models` are not enough for Dynamo/SGLang; send a tiny chat completion before AIPerf.
-- Treat metrics endpoints as optional/configured. For disagg, wait/scrape every endpoint explicitly.
-- Start tachometer before load, stop it with SIGINT, and verify `final.parquet`.
+- Treat metrics endpoints as generated/configured by `telemetry:`. For disagg, the telemetry config should include every backend/frontend endpoint from topology.
+- Start configured telemetry before load and stop it during lifecycle cleanup.
 - Run the benchmark command after readiness.
 - Verify AIPerf JSON before reporting numbers.
 - Verify GPU/process cleanup after each phase.
 
 If any item is missing, patch the `srt-slurm` renderer/template rather than adding a parallel script to the recipe.
-
-## Tachometer
-
-If `tachometer-scraper` is not installed and the user wants telemetry:
-
-```bash
-git clone git@github.com:NVIDIA-dev/warnold-tachometer.git /ephemeral/warnold-tachometer
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/ephemeral/cargo-target}"
-cargo build --release --manifest-path /ephemeral/warnold-tachometer/tachometer-scraper/Cargo.toml
-find "$CARGO_TARGET_DIR" /ephemeral/warnold-tachometer -path '*/release/tachometer-scraper' -type f 2>/dev/null
-```
-
-Renderer output should run tachometer like this. Use the snippet only as a renderer requirement or short local validation glue; do not copy it into a long-lived parallel lifecycle script:
-
-```bash
-tachometer-scraper \
-  --endpoint worker=http://localhost:8081/metrics \
-  --storage "$ARTIFACT_DIR/tachometer/run" \
-  --local-dir "$ARTIFACT_DIR/tachometer-local" \
-  --freq "${TACHOMETER_FREQ:-1.0}" \
-  --save-interval 2 \
-  --sync-interval 0 >"$ARTIFACT_DIR/tachometer.log" 2>&1 &
-TACHOMETER_PID=$!
-# ...benchmark...
-kill -INT "$TACHOMETER_PID"; wait "$TACHOMETER_PID" 2>/dev/null || true
-```
-
-For disagg, name endpoints:
-
-```bash
---endpoint prefill=http://localhost:8081/metrics \
---endpoint decode=http://localhost:8082/metrics
-```
 
 ## AIPerf Flags
 
@@ -153,7 +155,7 @@ Defaults for agent-run `srt-slurm` benchmarks:
 - Smoke: concurrency 1-2, request count 5-10, warmup 1.
 - Load: concurrency 16-32, fresh server per phase.
 - Always `--ui none`.
-- Usually `--no-server-metrics` when tachometer/direct scrape is enabled.
+- Usually `--no-server-metrics` when `srt-slurm` telemetry is enabled.
 - Always explicit `--output-artifact-dir` and `--profile-export-prefix`.
 - Use `--tokenizer-trust-remote-code` for HF models that need it.
 - If exact OSL matters, add server-supported `ignore_eos` or `min_tokens`; `--osl` alone may not force generation length.
@@ -174,22 +176,19 @@ assert error_total == 0, error_counts
 PY
 ```
 
-Verify tachometer parquet:
+Verify telemetry artifacts when `telemetry.enabled`:
 
 ```bash
-test -s "$ARTIFACT_DIR/tachometer/run/final.parquet"
-python3 - "$ARTIFACT_DIR/tachometer/run/final.parquet" <<'PY'
-import sys, pyarrow.parquet as pq
-pf = pq.ParquetFile(sys.argv[1])
-print({"rows": pf.metadata.num_rows, "cols": pf.metadata.num_columns, "columns": pf.schema.names})
-PY
+test -f "$LOG_DIR/telemetry_config.toml"
+test -d "$LOG_DIR/telemetry"
+find "$LOG_DIR/telemetry" -type f | head
 ```
 
 Report:
 
 - Artifact root.
 - AIPerf request count, error/cancel state, TTFT, latency, ITL, throughput.
-- Tachometer row counts and endpoint names.
+- Telemetry storage path, endpoint names from `telemetry_config.toml`, and scraper/exporter log status.
 - GPU memory/process cleanup state.
 
 ## Cleanup
@@ -197,8 +196,8 @@ Report:
 Before launch, list candidate stale processes and only kill known benchmark-owned processes:
 
 ```bash
-pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf profile|[t]achometer-scraper' || true
-pkill -9 -u "$USER" -f '[a]iperf profile|[t]achometer-scraper' 2>/dev/null || true
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf profile|[t]elemetry-scraper|[d]cgm-exporter|[n]ode_exporter' || true
+pkill -9 -u "$USER" -f '[a]iperf profile' 2>/dev/null || true
 # Only after confirming they belong to this benchmark:
 # pkill -TERM -u "$USER" -f 'path/to/launch.sh|--port 8000|--model-path Qwen/Qwen3-0.6B' 2>/dev/null || true
 sleep 3
@@ -209,7 +208,7 @@ After each phase:
 
 ```bash
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
-pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf|[t]achometer-scraper' || true
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf|[t]elemetry-scraper|[d]cgm-exporter|[n]ode_exporter' || true
 ```
 
 ## Memory
