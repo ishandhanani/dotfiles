@@ -18,6 +18,7 @@ Project-specific launch args come from the repo `CLAUDE.md`/`AGENTS.md`, `~/memo
 - Treat `/health` and `/v1/models` as partial readiness only. Before load, send a tiny request to `/v1/chat/completions` or the target inference endpoint.
 - Always verify AIPerf JSON and final GPU/process cleanup before trusting numbers.
 - Invoke `/memory-log` for benchmark results, root causes, or durable launch decisions.
+- On shared machines, list candidate stale processes first and narrow cleanup to user-owned, benchmark-owned processes or known ports. Do not run broad `pkill` patterns when other active work may match.
 
 ## Choose The Representation
 
@@ -29,13 +30,16 @@ Use one source of truth per task:
 
 ## Clean First
 
-Use targeted cleanup first, then verify GPU memory:
+Use targeted cleanup first, then verify GPU memory. On shared machines, review matches before killing and narrow server patterns to the current run, launch script, model, or ports:
 
 ```bash
-pkill -9 -f 'sglang|dynamo|vllm|trtllm|aiperf profile|tachometer-scraper' 2>/dev/null || true
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf profile|[t]achometer-scraper' || true
+pkill -9 -u "$USER" -f '[a]iperf profile|[t]achometer-scraper' 2>/dev/null || true
+# Only kill stale servers after confirming they belong to this benchmark:
+# pkill -TERM -u "$USER" -f 'path/to/launch.sh|--port 8000|--model-path Qwen/Qwen3-0.6B' 2>/dev/null || true
 sleep 3
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
-pgrep -af 'sglang|dynamo|vllm|trtllm|aiperf|tachometer-scraper' || true
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf|[t]achometer-scraper' || true
 ```
 
 If GPU memory is still held:
@@ -57,13 +61,18 @@ set -Eeuo pipefail
 RUN_ROOT="${RUN_ROOT:-$PWD/outputs/$(date +%Y%m%d_%H%M%S)}"
 MODEL="${MODEL:-Qwen/Qwen3-0.6B}"
 PORT="${PORT:-8000}"
-METRICS_PORT="${METRICS_PORT:-8081}"
 TACHOMETER_BIN="${TACHOMETER_BIN:-$(command -v tachometer-scraper || true)}"
 AIPERF_BIN="${AIPERF_BIN:-$(command -v aiperf || true)}"
+METRICS_URLS="${METRICS_URLS:-}"  # Optional space-separated URLs, e.g. http://localhost:8081/metrics
 SERVER_PID=""
 TACHOMETER_PID=""
 
 log() { printf '[server-lifecycle] %s\n' "$*"; }
+
+require_executable() {
+  local name="$1" path="$2"
+  [[ -n "$path" && -x "$path" ]] || { log "$name not executable; set ${name}_BIN"; return 1; }
+}
 
 stop_process_group() {
   local pid="${1:-}"
@@ -83,7 +92,6 @@ cleanup() {
   local rc=$?
   stop_tachometer
   stop_process_group "$SERVER_PID"
-  pkill -9 -f 'aiperf profile|tachometer-scraper' 2>/dev/null || true
   exit "$rc"
 }
 trap cleanup EXIT INT TERM
@@ -131,6 +139,7 @@ Launch server inside the script and capture logs:
 
 ```bash
 mkdir -p "$RUN_ROOT/server"
+require_executable AIPERF "$AIPERF_BIN"
 (
   # Activate venv, export HF_HOME, CUDA_VISIBLE_DEVICES, etc. here.
   exec setsid bash path/to/launch.sh --model-path "$MODEL"
@@ -138,13 +147,18 @@ mkdir -p "$RUN_ROOT/server"
 SERVER_PID=$!
 
 wait_http_ready "http://localhost:${PORT}/v1/models" 420
-wait_http_ready "http://localhost:${METRICS_PORT}/metrics" 120
+if [[ -n "${METRICS_URLS:-}" ]]; then
+  for metrics_url in $METRICS_URLS; do
+    wait_http_ready "$metrics_url" 120
+  done
+fi
 wait_chat_ready 600
 ```
 
-For multi-worker disagg, wait for every metrics endpoint and scrape each endpoint with a stable name:
+For multi-worker disagg, set `METRICS_URLS` to every metrics endpoint and scrape each endpoint with a stable name:
 
 ```bash
+export METRICS_URLS="http://localhost:8081/metrics http://localhost:8082/metrics"
 start_tachometer "$RUN_ROOT" \
   --endpoint prefill=http://localhost:8081/metrics \
   --endpoint decode=http://localhost:8082/metrics
@@ -154,8 +168,9 @@ If tachometer is missing and the user wants it, build it from `NVIDIA-dev/warnol
 
 ```bash
 git clone git@github.com:NVIDIA-dev/warnold-tachometer.git /ephemeral/warnold-tachometer
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/ephemeral/cargo-target}"
 cargo build --release --manifest-path /ephemeral/warnold-tachometer/tachometer-scraper/Cargo.toml
-find "${CARGO_TARGET_DIR:-/ephemeral/cargo-target}" target -path '*/release/tachometer-scraper' -type f 2>/dev/null
+find "$CARGO_TARGET_DIR" /ephemeral/warnold-tachometer -path '*/release/tachometer-scraper' -type f 2>/dev/null
 ```
 
 ## AIPerf
@@ -178,6 +193,8 @@ Agent-run AIPerf defaults:
 Baseline command:
 
 ```bash
+[[ -x "$AIPERF_BIN" ]] || { echo "aiperf not found; set AIPERF_BIN" >&2; exit 1; }
+mkdir -p "$RUN_ROOT/aiperf"
 "$AIPERF_BIN" profile "$MODEL" \
   --url "http://localhost:${PORT}" \
   --endpoint-type chat \
@@ -255,7 +272,7 @@ stop_tachometer
 stop_process_group "$SERVER_PID"
 sleep 2
 nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
-pgrep -af 'sglang|dynamo|vllm|trtllm|aiperf|tachometer-scraper' || true
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf|[t]achometer-scraper' || true
 ```
 
 ## Datasets
