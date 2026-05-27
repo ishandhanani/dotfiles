@@ -117,7 +117,7 @@ cargo build --release --manifest-path /ephemeral/warnold-tachometer/tachometer-s
 find "$CARGO_TARGET_DIR" /ephemeral/warnold-tachometer -path '*/release/tachometer-scraper' -type f 2>/dev/null
 ```
 
-Rendered/local lifecycle scripts should run tachometer like this:
+Renderer output should run tachometer like this. Use the snippet only as a renderer requirement or short local validation glue; do not copy it into a long-lived parallel lifecycle script:
 
 ```bash
 tachometer-scraper \
