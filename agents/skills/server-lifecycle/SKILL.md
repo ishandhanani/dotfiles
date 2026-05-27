@@ -19,6 +19,14 @@ Project-specific launch args come from the repo `CLAUDE.md`/`AGENTS.md`, `~/memo
 - Always verify AIPerf JSON and final GPU/process cleanup before trusting numbers.
 - Invoke `/memory-log` for benchmark results, root causes, or durable launch decisions.
 
+## Choose The Representation
+
+Use one source of truth per task:
+
+- **Use `srt-slurm` YAML** when working in `srt-slurm` or when the benchmark should be reusable on SLURM. Put model, topology, backend config, and inline AIPerf command in YAML; validate with `srtctl dry-run` and `srtctl apply --bash | bash -n`.
+- **Use a bash lifecycle runner** for local-only experiments, repos without a YAML renderer, or glue around existing launch scripts. This is the right shape for a 2x GPU workstation run that starts Dynamo/SGLang locally and collects tachometer output.
+- **Use both only when YAML is the durable artifact and bash is generated or local validation glue.** Do not maintain two independent launch definitions for the same benchmark.
+
 ## Clean First
 
 Use targeted cleanup first, then verify GPU memory:
@@ -37,6 +45,8 @@ nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,nohead
 ```
 
 ## Launch Pattern
+
+This pattern is for local/ad hoc runners and for understanding what rendered lifecycle scripts should do. If `srt-slurm` YAML is the source of truth, prefer rendering the script from YAML instead of hand-maintaining this shell.
 
 Use `setsid` for child launch scripts that may trap `kill 0` internally, such as Dynamo example launchers. That isolates the child process group so its cleanup cannot kill the parent benchmark runner.
 
@@ -190,7 +200,7 @@ Baseline command:
 
 ## srt-slurm
 
-When the repo supports it, prefer declarative configs plus rendered scripts:
+When the repo supports it, prefer declarative configs as the durable benchmark definition:
 
 ```bash
 uv run srtctl dry-run -f path/to/config.yaml
@@ -201,6 +211,7 @@ For benchmark YAMLs:
 - Inline the AIPerf command under `benchmark.type: custom`.
 - Include `--ui none`, deterministic artifact dir/prefix, and usually `--no-server-metrics`.
 - For local shared-node disagg in `srt-slurm`, use the repo's shared-node topology convention (for example `decode_nodes: 0` when decode shares the prefill node).
+- Treat `srtctl apply --bash` output as the execution/rendering artifact, not a second hand-written source of truth.
 
 ## Verify Results
 
