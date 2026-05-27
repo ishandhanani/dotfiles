@@ -1,12 +1,12 @@
 ---
-name: srt-slurm-lifecycle
-description: Use when working in NVIDIA srt-slurm to author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, collect tachometer telemetry, validate artifacts, and improve the srtctl lifecycle renderer. Prefer this over generic hand-written server lifecycle scripts for srt-slurm tasks.
+name: server-lifecycle
+description: Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, collect tachometer telemetry, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane.
 user-invocable: true
 ---
 
-# srt-slurm Lifecycle
+# Server Lifecycle
 
-In `srt-slurm`, YAML is the durable benchmark definition and rendered bash is the execution artifact. Do not maintain a separate hand-written launch script for the same benchmark unless it is temporary local validation glue.
+Use `srt-slurm` as the unified control plane for server lifecycle work. YAML is the durable benchmark definition and rendered bash is the execution artifact. Do not maintain a separate hand-written launch script for the same benchmark unless it is temporary local validation glue.
 
 Use this workflow for SGLang/Dynamo/vLLM/TRT-LLM benchmark recipes, local smoke runs, SLURM jobs, `srtctl apply --bash`, AIPerf, and tachometer.
 
