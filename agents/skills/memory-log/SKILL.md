@@ -79,10 +79,10 @@ Also update `~/memory/INDEX.md` registry table to keep the "Last Active" column 
 ## Step 5: Commit
 
 ```bash
-cd ~/memory && git add -A && git commit -m "<project>: <short description>"
+cd ~/memory && git add -A && git commit -m "<project>: <short description>" && git push
 ```
 
-Do not push.
+Push every memory commit. Incremental memory pushes are encouraged.
 
 ---
 

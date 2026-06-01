@@ -55,7 +55,6 @@ in
     starship
     jq
     fzf
-    eza
     bat
     zoxide
     zellij

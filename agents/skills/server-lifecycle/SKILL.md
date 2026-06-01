@@ -114,14 +114,48 @@ uv run aiperf profile <model> \
   --concurrency 16 \
   --streaming \
   --request-timeout-seconds 300 \
-  --artifact-dir ~/memory/<project>/benchmarks/results/
+  --output-artifact-dir ~/memory/<project>/benchmarks/results/ \
+  --ui none \
+  --no-server-metrics
 ```
+
+AIPerf defaults for agent-run benchmarks:
+- Use `--ui none` for non-interactive runs so logs stay parseable and the benchmark never waits on a TUI.
+- Use `--no-server-metrics` when metrics are collected separately (tachometer, curl scrape, DCGM, etc.) or when the server's Prometheus payload is noisy/nullable. For SGLang, prefer tachometer or direct `/metrics` capture over AIPerf's server-metrics collector.
+- Keep `--output-artifact-dir` and `--profile-export-prefix` explicit so JSON/CSV/log paths are deterministic.
 
 ## Step 4: Collect and Verify
 
 ```bash
 # Check metrics during run (adjust grep patterns per server)
 curl -s localhost:${PORT}/metrics | grep -E 'cache|hit|evict|request' | grep -v '^#'
+```
+
+If `tachometer-scraper` is available, run it as the metrics collector and stop it with SIGINT so it writes `final.parquet`:
+```bash
+tachometer-scraper \
+  --endpoint worker=http://localhost:${METRICS_PORT}/metrics \
+  --storage "${ARTIFACT_DIR}/tachometer/run" \
+  --local-dir "${ARTIFACT_DIR}/tachometer-local" \
+  --freq 1.0 \
+  --save-interval 2 \
+  --sync-interval 0 &
+TACHOMETER_PID=$!
+# ...run benchmark...
+kill -INT "$TACHOMETER_PID"; wait "$TACHOMETER_PID" 2>/dev/null || true
+```
+
+Verify AIPerf JSON before trusting numbers:
+```bash
+python3 - "${ARTIFACT_DIR}/aiperf.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+error_counts = data.get("error_request_count") or {}
+error_total = sum(v.get("value", 0) for v in error_counts.values() if isinstance(v, dict))
+assert not data.get("was_cancelled"), "aiperf was cancelled"
+assert not data.get("error_summary"), data.get("error_summary")
+assert error_total == 0, error_counts
+PY
 ```
 
 After collecting results, invoke `/memory-log` to record findings.

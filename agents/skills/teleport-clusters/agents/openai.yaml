@@ -1,0 +1,4 @@
+interface:
+  display_name: "Teleport Clusters"
+  short_description: "Use tsh auth and the memory cluster registry for cluster access"
+  default_prompt: "Use teleport-clusters to check cluster access and Teleport auth state."

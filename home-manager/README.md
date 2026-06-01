@@ -114,7 +114,7 @@ All shell aliases and functions are declaratively managed:
 
 - **Git aliases**: `gs`, `ga`, `gc`, `gp`, etc.
 - **Navigation**: `godesk`, `godown`
-- **Better tools**: `ls` → `eza`, `cat` → `bat`, `grep` → `ripgrep`
+- **Better tools**: `cat` → `bat`, `grep` → `ripgrep`
 - **Docker/Kubernetes**: `d`, `dc`, `k`
 
 ## Customization

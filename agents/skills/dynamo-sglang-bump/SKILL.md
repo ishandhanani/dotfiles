@@ -24,6 +24,14 @@ If these paths don't exist on the box, ask the user before cloning to a new loca
 
 Before touching anything, confirm with the user:
 - **Target SGLang version** (e.g. `0.5.9`, mapped to tag `v0.5.9`).
+- **Runtime container tags.** Always ask — these don't always match the pip version 1:1 (`.post1` suffixes, RC tags, CUDA variants). Need:
+  - The CUDA-default runtime tag, e.g. `v0.5.11-runtime`
+  - The CU130 runtime tag, e.g. `v0.5.11-cu130-runtime`
+  Both go into `container/context.yaml`, `container/rendered.Dockerfile`, `container/compliance/README.md`, and any `container/templates/sglang_runtime.Dockerfile` references. **Never guess.** Ask explicitly: "What `lmsysorg/sglang` runtime image tags should I bump to for the default and cu130 variants?"
+
+  **Verify the tags exist on Docker Hub before applying** — `docker buildx imagetools inspect lmsysorg/sglang:v<ver>-runtime` is the cheapest check. SGLang ships *base* images and *runtime* images via two **separate** GitHub Actions workflows ("Release Docker Images" and "Release Docker Runtime Images"), and the runtime workflow has historically failed/been delayed for some releases (e.g. v0.5.11's runtime build initially died on apt-mirror flake during `apt-get update`). If the runtime tag doesn't exist yet:
+  - Ask the user whether to (a) wait for upstream to re-run the runtime workflow (`gh run list --repo sgl-project/sglang --workflow "Release Docker Runtime Images"`), (b) push to a maintainer with permission to dispatch it (`workflow_dispatch` accepts a `version` input matching `X.Y.Z`), or (c) **defer the container tag bump to a follow-up PR** and ship the pip bump alone. Option (c) matches the precedent at commit `26af597bf85` ("chore: SGLang base image refresh ...") and is the right call when there's no eta on the runtime images.
+  - Whichever path the user picks, mention it explicitly in the bump PR body so reviewers don't think the container files were forgotten.
 - **Branch name**. Default convention: `idhanani/sgl-to-<ver>-and-cleanups` (matches the `0.5.9` precedent on `ishan/sgl-to-0.5.9-and-cleanups`).
 - **Linear ticket** if there is one, for the PR description.
 
@@ -70,10 +78,10 @@ python -c "import sglang" 2>&1 | head -1   # expected: ModuleNotFoundError
 
 ## Step 5: Install SGLang (Local Editable)
 
-Install from the `/ephemeral/sglang` checkout, not from PyPI — this lets you grep into the live SGLang source while debugging.
+Install from the `/ephemeral/sglang` checkout, not from PyPI — this lets you grep into the live SGLang source while debugging. **Always include `[diffusion]`** — image/video/dllm launch scripts pull in `diffusers`, `imageio`, `imageio-ffmpeg`, `moviepy` etc. via that extra. Without it you'll bounce off `ModuleNotFoundError: imageio` / `diffusers` two scripts in.
 
 ```bash
-cd /ephemeral/sglang && uv pip install -e "python"
+cd /ephemeral/sglang && uv pip install -e "python[diffusion]"
 python -c "import sglang; print(sglang.__version__)"
 ```
 
@@ -81,7 +89,10 @@ The reported version must match the target. If pip resolves a different one, loo
 
 ## Step 6: Build Dynamo Bindings + Install
 
+A fresh venv has neither `maturin` nor the `nixl` Python bindings — install both first or `maturin develop` will `command not found` and dynamo workers will fail at import with `ImportError: NIXL Python bindings must be installed`.
+
 ```bash
+uv pip install maturin nixl
 cd /ephemeral/dynamo/lib/bindings/python && maturin develop --uv
 cd /ephemeral/dynamo && uv pip install -e .
 ```
@@ -97,8 +108,10 @@ python -c "from dynamo.prometheus_names import kvstats; print('ok')"
 Encode these as preflight env vars for the test session:
 
 - **CuDNN mismatch** (`SGLANG_DISABLE_CUDNN_CHECK=1`)
-  PyTorch ships an older CuDNN than newer SGLang requires for Conv3d (vision/multimodal). Set this before launching `agg_vision.sh` and any multimodal script. Required for 0.5.9.
+  PyTorch ships an older CuDNN than newer SGLang requires for Conv3d (vision/multimodal). Set this before launching `agg_vision.sh` and any multimodal script. Required for 0.5.9; still required at 0.5.11.
 - **Local model cache**: confirm `HF_HOME` / `HF_HUB_CACHE` point to a fast disk (`/ephemeral/cache` on this box) so tests don't redownload weights.
+- **Verify HF_TOKEN before launch.** Anonymous HF requests get 429-rate-limited fast, and gated models (`black-forest-labs/FLUX.1-dev`, anything with a license click-through) refuse outright. `hf auth whoami` must succeed; if it errors with "Invalid user token" the env's `HF_TOKEN` is stale and the user has to provide a fresh one before image_diffusion / multimodal scripts will work.
+- **Pre-download the heavy / gated models.** Letting the launch script trigger the download is fragile under HF rate limits — a half-completed download will error mid-init with a confusing 429 traceback. Pre-fetch with `hf download <repo> --token "$HF_TOKEN"` first. Big offenders: FLUX.1-dev (~25 GB, gated), LLaDA2.0-mini-preview (~35 GB), Wan2.1-T2V-1.3B-Diffusers.
 
 ## Step 8: Walk Every Launch Script
 
@@ -128,15 +141,16 @@ multimodal_disagg.sh                # needs >=3 GPUs; SKIP otherwise
 For each script:
 
 1. Note `nvidia-smi` GPU count vs. script's GPU need. Skip with a recorded reason if short.
-2. `pkill -9 -f sglang; pkill -9 -f dynamo; sleep 3` before launch.
-3. Tee output: `bash launch/<script>.sh 2>&1 | tee /tmp/dyn-sgl-bump-<script>.log`.
+2. `pkill -9 -f sglang; pkill -9 -f dynamo; pkill -9 -f sgl_diffusion; sleep 3` before launch. Diffusion workers spawn an `sgl_diffusion::scheduler` child process that survives `pkill -f sglang`; explicitly grep for it. After diffusion runs, `nvidia-smi` may still show ~30 GB used by an orphan — kill it by PID.
+3. Tee output: `bash launch/<script>.sh 2>&1 | tee /tmp/dyn-sgl-bump-<script>.log`. The dynamo frontend logs a `404 GET /` every ~10s from a health probe that has nothing to do with you; filter with `grep -vE "GET.+uri.+/"` when reading.
 4. Validate with the matching health/inference probe:
    - chat scripts: `curl -s -X POST localhost:8000/v1/chat/completions -d '{...}'`
    - embed: `/v1/embeddings`, expect dim count
-   - router: confirm `kv_hit_rate` field appears in a response
-   - diffusion/video: check `result.frames` is non-empty
+   - router: confirm a `Selected worker:` line shows up in the worker log per request (kv-router decision)
+   - vision: send a `data:image/png;base64,...` URL — public image URLs (Wikimedia, raw.githubusercontent.com test fixtures) often 403 / 404. Use `/ephemeral/sglang/examples/assets/example_image.png` as the canonical inline image.
+   - diffusion/video: check the file at the returned `file://...` URL is non-empty (~150 KB MP4 / ~200 KB PNG for the small test args)
 5. On failure, **read the full traceback before guessing** — guessing from release notes wastes more time than reading the stack. Then jump to the fix patterns below.
-6. After PASS, kill cleanly. Don't leave servers behind between scripts.
+6. After PASS, kill cleanly. Don't leave servers behind between scripts. The `dynamo.frontend` process is reparented to PID 1 after the bash trap fires; `pkill -f sglang` won't catch it. Always re-check `ps -ef | grep -E "sglang|dynamo|sgl_diffusion"` before next launch.
 
 ## Step 9: Fix Patterns (from 0.5.9 bump — expect similar shapes)
 
@@ -186,23 +200,20 @@ Read `components/src/dynamo/sglang/CLAUDE.md` ("SGLang Backwards Compatibility" 
 
 1. **Support window: N and N-1.** Whatever the new target version is, that becomes N. The previous release becomes N-1 and stays supported via a fallback. Anything older gets deleted in this same PR.
 2. **Only symbols that have actually broken belong in `_compat.py`.** Don't preemptively shim every `sglang.*` import.
-3. **Try new path first, except `ImportError`, fall back.** Example layout:
+3. **Try new path first, except `ImportError`, fall back.** Example layout (this is the *shape*, not the current code — the actual `_compat.py` swings in and out of having branches like this as versions cycle):
    ```python
    try:
-       from sglang.srt.utils.network import NetworkAddress, get_local_ip_auto
+       from sglang.srt.new_module import Symbol  # vX.Y+
    except ImportError:
-       # Fallback for sglang 0.5.9. Remove when min supported version is 0.5.10+
-       from sglang.srt.utils import get_local_ip_auto
-       class NetworkAddress: ...   # minimal polyfill
+       # Fallback for sglang <vX.Y. Remove when min supported version is vX.Y+
+       from sglang.srt.old_module import Symbol  # noqa: F401
    ```
 4. **Every fallback branch carries a "remove when" comment** naming the version that retires it. No exceptions — without that line, future bumps can't safely prune.
-5. **Polyfill only what Dynamo actually calls.** `NetworkAddress` in `_compat.py` only implements the surface area component code touches.
-6. **Never gate on `sglang.__version__`.** SGLang's version string doesn't always reflect the internal layout. Use `try/except ImportError` (for moved symbols) or `inspect.signature` / `getattr` probing (for changed signatures — see `filter_supported_async_generate_kwargs` and `mm_encode` in the existing file).
-7. **Signature drift gets a wrapper, not a try/except at every call site.** Examples already in `_compat.py`:
-   - `mm_encode(encoder, mm_items, modality)` — wraps `MMEncoder._encode` whose 0.5.10 signature gained a `modality` arg and a 3rd return value.
-   - `enable_disjoint_streaming_output(server_args)` — bridges the `stream_output` → `incremental_streaming_output` rename on `ServerArgs`.
-   - `get_scheduler_info(engine)` — probes multiple known attribute paths instead of pinning one.
+5. **Polyfill only what Dynamo actually calls.** When SGLang introduces a new class that older releases don't have, the `except ImportError` branch defines a minimal stand-in that covers exactly the methods/attributes component code touches. Don't reproduce the full upstream surface.
+6. **Never gate on `sglang.__version__`.** SGLang's version string doesn't always reflect the internal layout. Use `try/except ImportError` (for moved symbols) or `inspect.signature` / `getattr` probing (for changed signatures — see `filter_supported_async_generate_kwargs` in the current file).
+7. **Signature drift gets a wrapper, not a try/except at every call site.** Read the current `_compat.py` for the live wrappers — historically these have included `mm_encode` (MMEncoder._encode signature change), `enable_disjoint_streaming_output` (ServerArgs field rename), and `get_scheduler_info` (multi-attribute probing). Wrappers come and go; what stays is the rule that signature drift never leaks into call sites.
 8. **Defer CUDA-only imports.** `_compat.py` is loaded on test/CI nodes too. Anything that pulls `sgl_kernel` (e.g. multimodal encoder internals) must be inside the function body, not at module top.
+9. **Top-of-module SGLang imports must hold for the pre-commit env too.** `tests/report_pytest_markers.py` mocks an explicit allow-list of `sglang.srt.*` submodules so collection works in the isolated pre-commit venv (no real sglang installed). When you make a previously-conditional `from sglang.srt.foo.bar import ...` unconditional in `_compat.py`, **add `sglang.srt.foo.bar` to the `_MOCK_MODULES` list** in that script — otherwise the `Report pytest markers` hook will fail collecting every sglang test file. Easy to miss because everything works locally where sglang *is* installed.
 
 **Required cleanup as part of every bump PR**: prune branches that fall outside the new N / N-1 window. If pruning leaves `_compat.py` as trivial re-exports, inline the imports at call sites and delete the file. The compat shim is meant to be temporary; carrying dead branches forever defeats the policy.
 
@@ -240,6 +251,7 @@ Procedure:
 4. If `_compat.py` collapses to trivial re-exports (no try/except, no polyfills, no signature probing), **delete the file** and rewrite the call sites to import directly from `sglang.srt....`. The shim is meant to be temporary.
 5. Run the launch-script walk again on the targets you already passed for any handler that now imports differently. Don't trust that "it imported during step 8" means "it still imports after compat pruning" — call sites may have changed.
 6. Update `components/src/dynamo/sglang/CLAUDE.md`'s SGLang Backwards Compatibility section if the policy text references a specific version range. Bump the example `# Fallback for sglang <ver>` snippet to the new N-1.
+7. **Update the pre-commit mock list.** Open `tests/report_pytest_markers.py` and find the `_MOCK_MODULES` (sometimes just a top-level list literal of `"sglang.srt..."` strings). Any `sglang.srt.*` submodule you newly imported unconditionally — typically by removing a `try/except ImportError` in `_compat.py` and pinning to the canonical path — needs to be added there. Without this entry the `Report pytest markers` hook fails with `ModuleNotFoundError: No module named 'sglang.srt.<thing>'` when collecting any sglang test, because the pre-commit venv has no real sglang installed. **Always run `uvx pre-commit run --all-files` after the deprecation pass to confirm.**
 
 In the worklog, add a section listing every removed branch / polyfill / wrapper and which version it covered. This makes the deprecation reviewable and lets future bumps see the historical pattern.
 
@@ -247,7 +259,7 @@ In the worklog, add a section listing every removed branch / polyfill / wrapper 
 
 ## Step 11: Worklog + Memory
 
-When you have ≥1 launch script result, log to `~/memory/dynamo-upgrade-sglang-<ver>/` (create if missing — see `~/memory/dynamo-upgrade-sglang-059/` for the precedent shape).
+When you have ≥1 launch script result, log to `~/memory/dynamo-upgrade-sglang-<ver>/` (create if missing). Use `~/memory/dynamo-upgrade-sglang-0511/` as the current precedent shape — it covers the bundled-feature case (closing a related issue gated on the same version floor) and the deprecation table; older `~/memory/dynamo-upgrade-sglang-059/` is also valid but predates those patterns.
 
 Required artifacts:
 - `INDEX.md` with project frontmatter (status, repo, last-updated)
@@ -255,27 +267,51 @@ Required artifacts:
   - Branch + PR + GPU env preamble
   - Final results table: `# | Script | Status | Notes`
   - One numbered fix section per fix, each citing file:line and root cause
+  - A `_compat.py` deprecation table (one row per removed branch / polyfill / wrapper)
+  - An "env deps that surfaced" section if you had to install anything beyond `[diffusion]` (most fresh venvs need `nixl`, `maturin`, plus `pytest pytest-asyncio pytest-benchmark` to run the unit tests — list whatever bit you so the next bumper doesn't relearn it)
 
-Add a row to `~/memory/INDEX.md`. Commit with `dynamo-upgrade-sglang-<ver>: <short description>` (do not push memory).
+Add a row to `~/memory/INDEX.md`. Commit and push memory changes with `dynamo-upgrade-sglang-<ver>: <short description>`.
 
 ## Step 12: PR
 
+Before pushing: **run `uvx pre-commit run --all-files`**. The `Report pytest markers` hook walks every test file and fails if a previously-conditional `sglang.srt.*` import is now unconditional but missing from the mock list (see Step 10.7). Catching this locally is much faster than learning about it from CI.
+
 ```bash
 cd /ephemeral/dynamo
+uvx pre-commit run --all-files
 git push -u origin <branch>
 gh pr create --draft --title "sglang: bump to <ver>" --body "<body>"
 ```
 
 Body should link the worklog summary table and call out which scripts were SKIPPED (with reason — usually GPU count) so reviewers don't think they were missed.
 
+**Container image tags ship in this PR — *if* upstream has published them.** Confirm the tags from Step 1 actually resolve on Docker Hub (`docker buildx imagetools inspect lmsysorg/sglang:v<ver>-runtime` returns 0) before editing any container file. If they don't exist yet, defer per the Step 1 contingency — don't write a tag that 404s on pull.
+
+When they do exist, update all of:
+- `container/context.yaml` — `runtime_image_tag` for both the default and CU130 entries
+- `container/rendered.Dockerfile` — `ARG RUNTIME_IMAGE_TAG=v<new>-runtime`
+- `container/compliance/README.md` — the `lmsysorg/sglang:v<...>` table rows
+- `container/templates/sglang_runtime.Dockerfile` — any inline version refs (often a comment + the `FROM` tag). The mooncake-packaging workaround comment is version-specific — check whether the workaround is still needed against the new image; if upstream fixed it, remove the workaround block (don't just bump the version in the comment).
+
+Use the tags the user gave in Step 1 verbatim — don't paste a "natural-looking" guess. The pip version and the image tag don't always agree (`.post1`, CU variants, RC suffixes).
+
+**Out of scope for this PR (separate follow-ups):**
+- Drive-by cleanups (rename a default model, fix unrelated TODOs in launch scripts, reformat untouched files). Even when the TODO comment ties to "after sglang vX.Y upgrade", let it ride a separate PR.
+
+**Bundling exception:** if a feature is *gated* on the new version floor (e.g. a Grafana panel that needs metrics introduced in the bumped version), the user may explicitly request bundling it in. That's fine — it's not a drive-by, it's a feature that could not ship before this PR. Surface the bundling decision in the PR body and the worklog (see `~/memory/dynamo-upgrade-sglang-0511/` for the #8151 precedent).
+
 ## Anti-patterns
 
 - Don't `pip install sglang==<ver>` from PyPI — you lose the ability to grep SGLang source while triaging.
 - Don't reuse the previous bump's venv. Stale `.so` files in site-packages cause non-obvious failures.
+- Don't `uv pip install -e "python"` (no extras) on the SGLang checkout. The diffusion launch scripts will break two scripts in. Always `python[diffusion]`.
+- Don't skip the `uv pip install maturin nixl` preflight. Fresh venv has neither, and `maturin develop --uv` will `command not found` while dynamo workers will fail at import on `nixl`.
 - Don't keep editing without re-running the failing script. The fix is only real once the script PASSes end-to-end.
-- Don't bundle infra cleanups into the bump PR. They make review harder and obscure which fix corresponds to which breakage.
+- Don't bundle drive-by infra cleanups (default-model TODOs, renames, unrelated reformatting) into the bump PR. They make review harder and obscure which fix corresponds to which breakage. **Exceptions:** (a) container runtime image tags — these ship *in* the bump PR (see Step 12); (b) features gated on the new version floor (e.g. dashboard panels that need new metrics) can be bundled if the user explicitly asks, since those couldn't ship before this PR by definition.
 - Don't skip a script silently for non-GPU reasons. Either fix it or record why it was skipped.
 - Don't add `try: from sglang...new_path except ImportError: from sglang...old_path` blocks inside handler / init / register modules. Every SGLang import-shape change goes in `_compat.py`. The component is supposed to import SGLang either directly (when stable) or from `_compat` (when version-dependent), never via inline try/except.
 - Don't gate on `sglang.__version__`. Use `try/except ImportError` for moved symbols and `inspect.signature` / `getattr` probing for changed signatures.
 - Don't add a `_compat.py` fallback branch without a `# Fallback for sglang <ver>. Remove when min supported version is <next>+` comment. Untagged branches accrete forever.
 - Don't leave fallback branches for versions older than N-1. Pruning them is part of the bump, not a separate cleanup.
+- Don't push without running `uvx pre-commit run --all-files` first. The `Report pytest markers` hook walks every test file in the isolated pre-commit venv and trips on any unconditional `sglang.srt.*` import that isn't in `tests/report_pytest_markers.py`'s mock list. Local pytest passes (sglang is installed) so the failure only shows up in pre-commit / CI.
+- Don't accept ruff/black auto-reformatting of unrelated lines in files you touched. Revert the noise lines before committing — the bump PR is already wide; reformatting unrelated `assert isinstance(...)` blocks just buries the real changes.
