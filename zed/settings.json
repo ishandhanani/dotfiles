@@ -3,5 +3,8 @@
 {
   "project_panel": {
     "dock": "left"
+  },
+  "agent": {
+    "dock": "right"
   }
 }
