@@ -1,0 +1,7 @@
+// Zed user settings.
+// Docs: https://zed.dev/docs/configuring-zed
+{
+  "project_panel": {
+    "dock": "left"
+  }
+}

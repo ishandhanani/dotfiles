@@ -303,7 +303,8 @@ ok "Git config applied"
 info "Zed editor config"
 mkdir -p "$HOME/.config/zed"
 ln -sfn "$DOTFILES_DIR/zed/keymap.json" "$HOME/.config/zed/keymap.json"
-ok "Linked ~/.config/zed/keymap.json -> dotfiles/zed/keymap.json"
+ln -sfn "$DOTFILES_DIR/zed/settings.json" "$HOME/.config/zed/settings.json"
+ok "Linked ~/.config/zed/{keymap,settings}.json -> dotfiles/zed/"
 
 # ---------------------------------------------------------------------------
 # 14. Wire the drop-in into ~/.bashrc if not already sourced
