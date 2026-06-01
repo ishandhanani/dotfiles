@@ -29,19 +29,12 @@ home-manager/
 
 ### Prerequisites
 
-1. **Install Nix** (if not already installed):
+**Install Nix** (if not already installed) — use the Determinate installer, which enables flakes by default and has a clean uninstaller:
 ```bash
-# macOS/Linux - Multi-user installation (recommended)
-sh <(curl -L https://nixos.org/nix/install) --daemon
+# macOS/Linux
+curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
 
 # After installation, restart your terminal
-```
-
-2. **Enable Flakes** (if not already enabled):
-```bash
-# Add to ~/.config/nix/nix.conf or /etc/nix/nix.conf
-mkdir -p ~/.config/nix
-echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 ```
 
 ### Quick Start
@@ -51,15 +44,18 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 git clone https://github.com/yourusername/dotfiles.git ~/dotfiles
 cd ~/dotfiles/home-manager
 
-# IMPORTANT: Update home.nix with your username and email
-vim home.nix  # Update username and home directory
-vim modules/git.nix  # Update git userName and userEmail
+# Pick the flake target matching this machine (see flake.nix homeConfigurations):
+#   work        idhanani@macbook
+#   home        ishandhanani@macbook
+#   brev-vm     ubuntu@linux x86_64
+#   brev-vm-arm ubuntu@linux aarch64
+#   brev-vm-gpu nvidia@linux
+#   simbox      ishan@linux
 
 # Apply the configuration
-nix run home-manager/master -- switch --flake .#ishandhanani@macbook
+nix run home-manager/master -- switch --flake .#work -b backup
 
-# Or if you have home-manager installed
-home-manager switch --flake .#ishandhanani@macbook
+# Or use the Makefile shortcuts: make work | make home | make vm | make vm-arm
 ```
 
 ### Alternative: Using nix-darwin (macOS only)
@@ -80,8 +76,8 @@ darwin-rebuild switch --flake .#macbook
 ### Daily Operations
 
 ```bash
-# Rebuild after changes
-home-manager switch --flake .#ishandhanani@macbook
+# Rebuild after changes (substitute your flake target: work, home, brev-vm, ...)
+home-manager switch --flake .#work
 
 # Or use the alias (after first install)
 rebuild
@@ -192,24 +188,23 @@ The configuration automatically detects your platform:
 
 1. **"Command not found: home-manager"**
    ```bash
-   nix-shell -p home-manager --run "home-manager switch --flake .#ishandhanani@macbook"
+   nix-shell -p home-manager --run "home-manager switch --flake .#work"
    ```
 
 2. **"Attribute not found"**
-   - Check your username matches in flake.nix
-   - Ensure system architecture is correct (aarch64-darwin for M1/M2)
+   - Check the flake target matches a `homeConfigurations` output in `flake.nix`
+   - Ensure system architecture is correct (aarch64-darwin for Apple Silicon)
 
 3. **"Permission denied"**
    ```bash
-   # Ensure Nix daemon is running
+   # Restart the Nix daemon (Determinate Nix)
    sudo launchctl kickstart -k system/org.nixos.nix-daemon
    ```
 
 4. **Conflicts with existing files**
    ```bash
-   # Backup and remove existing files
-   mv ~/.zshrc ~/.zshrc.backup
-   home-manager switch --flake .#ishandhanani@macbook
+   # home-manager switch already handles this with -b backup
+   home-manager switch --flake .#work -b backup
    ```
 
 ## Benefits of This Approach
@@ -228,7 +223,7 @@ The configuration automatically detects your platform:
 
 ```bash
 # Build without switching
-nix build .#homeConfigurations.ishandhanani@macbook.activationPackage
+nix build .#homeConfigurations.work.activationPackage
 
 # Enter a shell with your configuration
 nix develop

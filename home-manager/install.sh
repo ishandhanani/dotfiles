@@ -51,10 +51,10 @@ echo ""
 
 # Check if Nix is installed
 if ! command -v nix &> /dev/null; then
-    print_step "Nix is not installed. Installing Nix..."
-    
+    print_step "Nix is not installed. Installing with the Determinate installer..."
+
     if [[ "$OS" == "darwin" ]] || [[ "$OS" == "linux" ]]; then
-        sh <(curl -L https://nixos.org/nix/install) --daemon
+        curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm
         print_success "Nix installed successfully"
         print_warning "Please restart your terminal and run this script again"
         exit 0
@@ -63,44 +63,25 @@ if ! command -v nix &> /dev/null; then
         exit 1
     fi
 else
-    print_success "Nix is already installed"
+    print_success "Nix is already installed (Determinate enables flakes by default)"
 fi
 
-# Check if flakes are enabled
-print_step "Checking if flakes are enabled..."
-if ! nix flake --help &> /dev/null; then
-    print_warning "Flakes are not enabled. Enabling flakes..."
-    
-    mkdir -p ~/.config/nix
-    if ! grep -q "experimental-features" ~/.config/nix/nix.conf 2>/dev/null; then
-        echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
-        print_success "Flakes enabled in user config"
-    fi
-    
-    # Also try system-wide config for multi-user installs
-    if [[ -w /etc/nix/nix.conf ]]; then
-        if ! grep -q "experimental-features" /etc/nix/nix.conf 2>/dev/null; then
-            echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf > /dev/null
-            print_success "Flakes enabled in system config"
-        fi
-    fi
-    
-    # Restart daemon on macOS
-    if [[ "$OS" == "darwin" ]]; then
-        sudo launchctl kickstart -k system/org.nixos.nix-daemon
-    fi
-else
-    print_success "Flakes are already enabled"
-fi
-
-# Determine the correct flake target
+# Determine the correct flake target by matching the current user/OS/arch
+# to a homeConfigurations output defined in flake.nix.
 print_step "Determining flake target..."
 USERNAME=$(whoami)
-if [[ "$OS" == "darwin" ]]; then
-    FLAKE_TARGET="${USERNAME}@macbook"
-else
-    FLAKE_TARGET="${USERNAME}@linux"
-fi
+case "$OS:$ARCH:$USERNAME" in
+    darwin:*:idhanani)         FLAKE_TARGET="work" ;;
+    darwin:*:ishandhanani)     FLAKE_TARGET="home" ;;
+    linux:aarch64:ubuntu)      FLAKE_TARGET="brev-vm-arm" ;;
+    linux:*:ubuntu)            FLAKE_TARGET="brev-vm" ;;
+    linux:*:nvidia)            FLAKE_TARGET="brev-vm-gpu" ;;
+    linux:*:ishan)             FLAKE_TARGET="simbox" ;;
+    *)
+        print_error "No flake target known for $OS/$ARCH/$USERNAME. Edit install.sh or flake.nix."
+        exit 1
+        ;;
+esac
 print_success "Using flake target: $FLAKE_TARGET"
 
 # Check if configuration files need updating
@@ -142,7 +123,7 @@ done
 # Apply the configuration
 print_step "Applying Home Manager configuration..."
 # Instead of installing home-manager globally, just use your flake
-nix run home-manager/master -- switch --flake .#ishandhanani@macbook -b backup
+nix run home-manager/master -- switch --flake ".#${FLAKE_TARGET}" -b backup
 
 if [[ $? -eq 0 ]]; then
     print_success "Home Manager configuration applied successfully!"

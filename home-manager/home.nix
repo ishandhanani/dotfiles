@@ -23,6 +23,7 @@ in
     # Session path additions
     sessionPath = [
       "$HOME/.local/bin"
+      "$HOME/.local/go/bin"
       "$HOME/go/bin"
     ];
   };
@@ -34,6 +35,7 @@ in
     ./modules/zsh.nix
     ./modules/uvx.nix
     ./modules/rust.nix
+    ./modules/go.nix
     ./modules/bash.nix
     ./modules/ssh.nix
     ./modules/neovim.nix

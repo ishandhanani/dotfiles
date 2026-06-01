@@ -28,26 +28,15 @@ help: ## Show this help message
 	@echo "  2. Restart your terminal"
 	@echo "  3. Run 'make work', 'make home', or 'make vm'"
 
-install: ## Install Nix using official installer
-	@echo "$(BLUE)==> Installing Nix with official installer...$(NC)"
+install: ## Install Nix using the Determinate installer (flakes on by default)
+	@echo "$(BLUE)==> Installing Nix with Determinate installer...$(NC)"
 	@if ! command -v nix &> /dev/null; then \
 		echo "$(YELLOW)Installing Nix for $(OS) ($(ARCH))...$(NC)"; \
-		curl -L https://nixos.org/nix/install | sh -s -- --daemon; \
+		curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm; \
 		echo "$(GREEN)✓ Nix installed successfully$(NC)"; \
-		echo "$(YELLOW)! Please restart your terminal and run 'make work/home/vm'$(NC)"; \
+		echo "$(YELLOW)! Restart your terminal (or 'source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'), then run 'make work/home/vm'$(NC)"; \
 	else \
-		echo "$(GREEN)✓ Nix is already installed$(NC)"; \
-	fi
-	@echo "$(BLUE)==> Enabling flakes...$(NC)"
-	@sudo mkdir -p /etc/nix
-	@if ! grep -q "experimental-features" /etc/nix/nix.conf 2>/dev/null; then \
-		echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf > /dev/null; \
-		echo "$(GREEN)✓ Flakes enabled system-wide$(NC)"; \
-	else \
-		echo "$(GREEN)✓ Flakes already enabled system-wide$(NC)"; \
-	fi
-	@if [ "$(OS)" = "darwin" ]; then \
-		sudo launchctl kickstart -k system/org.nixos.nix-daemon; \
+		echo "$(GREEN)✓ Nix is already installed (Determinate enables flakes by default)$(NC)"; \
 	fi
 
 check: ## Check if configuration builds without applying

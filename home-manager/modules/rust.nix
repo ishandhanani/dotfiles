@@ -10,6 +10,8 @@
       echo "rustup already installed, skipping"
     else
       echo "Installing Rust via rustup..."
+      # Extend PATH so the piped rustup-init script can find curl/wget itself.
+      export PATH="${pkgs.curl}/bin:${pkgs.coreutils}/bin:$PATH"
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
       echo "Rust installed successfully"
     fi
