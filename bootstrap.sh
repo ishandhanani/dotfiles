@@ -296,7 +296,17 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 ok "Git config applied"
 
 # ---------------------------------------------------------------------------
-# 13. Wire the drop-in into ~/.bashrc if not already sourced
+# 13. Zed editor config (keymap)
+#     Symlinks dotfiles/zed/keymap.json -> ~/.config/zed/keymap.json
+#     Path is identical on Linux and macOS.
+# ---------------------------------------------------------------------------
+info "Zed editor config"
+mkdir -p "$HOME/.config/zed"
+ln -sfn "$DOTFILES_DIR/zed/keymap.json" "$HOME/.config/zed/keymap.json"
+ok "Linked ~/.config/zed/keymap.json -> dotfiles/zed/keymap.json"
+
+# ---------------------------------------------------------------------------
+# 14. Wire the drop-in into ~/.bashrc if not already sourced
 # ---------------------------------------------------------------------------
 BASHRC="$HOME/.bashrc"
 HOOK='# dotfiles bootstrap drop-in
