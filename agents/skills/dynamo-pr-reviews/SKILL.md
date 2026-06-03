@@ -217,15 +217,25 @@ Keep the concrete responses / log lines / numbers — they go in the review verb
 
 Summarize to the user first: what works (with evidence), what's broken/risky (`file:line` + evidence + severity), recommendation. **Do not post to GitHub until the user approves.**
 
-Once approved, post one `COMMENT`-type review with inline comments at exact diff lines:
+**IMPORTANT: Always create a DRAFT review first.** GitHub does not allow deleting submitted reviews (only pending/draft ones). Create the review as a draft, confirm with the user, then submit it.
+
+Once approved:
 ```bash
-# /tmp/review-$PR.json: {commit_id, event:"COMMENT", body:<summary+evidence>,
-#   comments:[{path,line,side:"RIGHT",body:<finding + proof snippet>}, ...]}
-gh api --method POST repos/ai-dynamo/dynamo/pulls/$PR/reviews --input /tmp/review-$PR.json
+# 1. Create as DRAFT (not visible to PR author until submitted)
+REVIEW_ID=$(gh api --method POST repos/ai-dynamo/dynamo/pulls/$PR/reviews \
+  -f commit_id=$(git rev-parse HEAD) \
+  -f body="<review body>" \
+  -f event="COMMENT" \
+  --jq '.id')
+
+# 2. Show user the draft content, get approval, then submit:
+gh api --method POST repos/ai-dynamo/dynamo/pulls/$PR/reviews/$REVIEW_ID/events \
+  -f event="SUBMIT" -f body="<final body>"
 ```
 
-- `commit_id` = `git rev-parse HEAD` of the PR branch; each `line` must be in the diff (RIGHT side).
-- Default `event: "COMMENT"`; Approve / Request-changes only if the user asks. One inline comment per finding, with the captured evidence. Concrete and kind.
+- `commit_id` = `git rev-parse HEAD` of the PR branch; each comment `line` must be in the diff (RIGHT side).
+- Default `event: "COMMENT"`; Approve / Request-changes only if the user asks.
+- One inline comment per finding, with the captured evidence. Concrete and kind.
 
 ## Step 8 — Persist the review to memory
 
