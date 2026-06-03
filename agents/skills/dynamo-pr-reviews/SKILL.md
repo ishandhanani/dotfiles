@@ -34,7 +34,9 @@ Dynamo carries a Rust core, so reuse the canonical build tree rather than a thro
 ```bash
 PR=<number>
 cd /ephemeral/dynamo
-git status          # must be clean — if dirty, STOP and ask (that's the user's work)
+# STOP and ask only on *tracked* modifications/staged changes (the user's work).
+# Untracked files are fine — `gh pr checkout` ignores them.
+git status --porcelain | grep -vE '^\?\?' && echo "tracked changes present -> STOP, ask the user" || echo "no tracked changes, safe to proceed"
 git fetch origin && git checkout main && git pull --ff-only
 ORIG_REF=$(git rev-parse --abbrev-ref HEAD)   # to restore later
 gh pr checkout $PR
@@ -70,8 +72,14 @@ Dynamo needs etcd (discovery) and NATS (transport). Reuse if present, else start
 # NATS (default nats://localhost:4222)
 pgrep -x nats-server >/dev/null || nats-server -p 4222 >/tmp/nats.log 2>&1 &
 
-# etcd: prefer 2379; if taken/unreachable, use 12379 and point Dynamo at it
-if ! curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1; then
+# etcd: prefer a usable 2379; else REUSE a healthy standalone etcd on 12379; else start one.
+# (Check 12379 before starting -- otherwise you spawn a second etcd that dies with
+#  "bind: address already in use" on the peer port and dumps a scary stacktrace.)
+if curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1; then
+  : # default etcd on 2379 is reachable over plain http -- use it
+elif curl -sf http://127.0.0.1:12379/health >/dev/null 2>&1; then
+  export ETCD_ENDPOINTS=http://127.0.0.1:12379   # reuse already-running standalone etcd
+else
   etcd --data-dir /tmp/dyn-etcd --name dyn \
     --listen-client-urls http://127.0.0.1:12379 --advertise-client-urls http://127.0.0.1:12379 \
     --listen-peer-urls http://127.0.0.1:12390 --initial-advertise-peer-urls http://127.0.0.1:12390 \
@@ -79,7 +87,7 @@ if ! curl -sf http://127.0.0.1:2379/health >/dev/null 2>&1; then
   sleep 3; export ETCD_ENDPOINTS=http://127.0.0.1:12379
 fi
 ```
-`ETCD_ENDPOINTS` redirects Dynamo's discovery backend; `NATS_SERVER` overrides NATS if needed.
+`ETCD_ENDPOINTS` redirects Dynamo's discovery backend; `NATS_SERVER` overrides NATS if needed. (Note: a k8s etcd on 2379 typically serves **https with client-cert auth**, so the plain-http health probe correctly fails and you fall through to 12379.)
 
 ## Step 4 — Launch agg.sh (background)
 
@@ -92,7 +100,7 @@ ETCD_ENDPOINTS=${ETCD_ENDPOINTS:-http://127.0.0.1:2379} DYN_LOG=debug \
   bash examples/backends/sglang/launch/agg.sh --model-path Qwen/Qwen3-0.6B \
   > /tmp/dyn-agg-$PR.log 2>&1 &
 ```
-Run as a background task; poll readiness, bail on failure signatures:
+**Launch the `bash agg.sh …` line as its OWN detached background task** (the harness background-run, or `setsid`). `agg.sh` sets `trap 'kill 0' EXIT`, so if you chain it after `cd`/`source`/`export` inside a single `set -e` shell the trap can tear down the process group and you get exit 1 with no log file. Keep env vars on the same line as the `bash agg.sh` invocation, nothing chained after it. Then poll readiness and bail on failure signatures:
 ```bash
 until curl -s http://localhost:8000/v1/models | grep -q Qwen; do
   grep -qiE "Traceback|exited with code|CUDA out of memory|Unable to create lease|Killed" /tmp/dyn-agg-$PR.log \
@@ -101,6 +109,7 @@ until curl -s http://localhost:8000/v1/models | grep -q Qwen; do
 done
 ```
 - `/v1/models` returning the model = worker registered and ready (the frontend `/health` comes up first, before the worker).
+- The frontend logs a stream of harmless `ERROR ... status=404 ... uri=/` (root-path polls) before/while the worker registers — **not** a failure; ignore them. Real failures match the grep above.
 - DEBUG logs: `DYN_LOG=debug` surfaces both the Rust runtime and the SGLang Python loggers (a worker `--log-level debug` alone does not).
 - Shape traffic to hit the changed path. E.g. a tool-template change → send `/v1/chat/completions` with `tools` + `tool_choice` (auto and a named choice); a cache change → repeated/shared-prefix prompts; a router change → multiple workers.
 
@@ -115,7 +124,7 @@ uvx aiperf profile \
   --prompt-input-tokens-mean 512 --output-tokens-mean 128 \
   --num-warmup-requests 8
 ```
-For a correctness/feature change, also hit `/v1/chat/completions` directly with `curl` to inspect the exact response (tool_calls, content, finish_reason) — aiperf is for throughput/latency, curl is for correctness.
+For a correctness/feature change, also hit `/v1/chat/completions` directly with `curl` to inspect the exact response (tool_calls, content, finish_reason) — aiperf is for throughput/latency, curl is for correctness. For a **correctness-only** PR, scale `--num-requests` down (e.g. 32) — the load run is just a concurrency/health smoke; save large runs for perf claims.
 
 ## Step 6 — Analyze
 
@@ -146,7 +155,12 @@ File it under the `dynamo-pr-reviews` umbrella project in `~/memory` (one subfol
 DIR=~/memory/dynamo-pr-reviews/$PR-<slug>; mkdir -p "$DIR"
 # $DIR/review.md: PR + branch, test setup (agg.sh, model), evidence, findings, posted-review link, verdict
 ```
-Register the row in `~/memory/dynamo-pr-reviews/INDEX.md` (create it if missing; frontmatter `type: project`, `last-updated`), `python3 ~/memory/scripts/lint_memory.py`, then `cd ~/memory && git add -A && git commit -m "dynamo-pr-reviews: add #$PR review" && git push`.
+Register the row in `~/memory/dynamo-pr-reviews/INDEX.md` (create it if missing; frontmatter `type: project`, `last-updated`), then `python3 ~/memory/scripts/lint_memory.py` — it lints the **whole** repo and **exits 0 even with findings**, so only act on findings that name *your* new files.
+
+Commit **only your files** — never `git add -A` in `~/memory` (the user may be committing concurrently; `-A` will sweep their unrelated changes into your commit):
+```bash
+cd ~/memory && git add dynamo-pr-reviews && git commit -m "dynamo-pr-reviews: add #$PR review" && git push
+```
 
 ## Cleanup
 

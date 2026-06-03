@@ -131,7 +131,7 @@ DIR=~/memory/sglang-pr-reviews/$PR-<slug>      # e.g. 26976-tiered-cached-token
 mkdir -p "$DIR"
 # write $DIR/review.md: PR + branch, test setup, evidence (logs/metrics/aiperf), findings, posted-review link, verdict
 ```
-Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `INDEX.md`), `python3 ~/memory/scripts/lint_memory.py`, and commit `cd ~/memory && git add -A && git commit -m "sglang-pr-reviews: add #$PR review" && git push`.
+Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `INDEX.md`), `python3 ~/memory/scripts/lint_memory.py` (lints the whole repo and exits 0 even with findings — only act on ones naming your files), and commit **only your files** (never `git add -A` in `~/memory` — it sweeps the user's concurrent work): `cd ~/memory && git add sglang-pr-reviews && git commit -m "sglang-pr-reviews: add #$PR review" && git push`.
 
 ## Cleanup
 
