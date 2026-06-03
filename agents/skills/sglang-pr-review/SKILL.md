@@ -12,6 +12,15 @@ Empirical, end-to-end workflow for testing an SGLang PR and leaving a scoped, ev
 
 Main path is pure SGLang: `python -m sglang.launch_server`. Almost everything (kernels, schedulers, cache, sampling, metrics, the OpenAI API) can be exercised this way — no external serving layer needed.
 
+## Boundaries — read-only on the PR
+
+This skill **tests and reviews**; it never changes the PR. The PR author owns every code change.
+
+- **Never** commit/push to the PR branch or the author's fork, never force-push, never apply suggestions or `gh pr` mutations (no edit, no commit-to-branch, no merge/close). You are a reviewer, not a committer.
+- Any local edits needed to get the build/test running are **throwaway** — discarded at cleanup, never pushed anywhere.
+- The **only** outbound action is leaving a review *comment* (findings + evidence), and **only after the user explicitly approves sharing it**. Default to producing the review locally and prompting the user to share.
+- If you find a fix, **describe it in the review** for the author to apply — do not apply it for them.
+
 ## Hardware fit — check first
 
 Default target: **2× L40S** (~46 GB each, 92 GB total; Ada sm_89; PCIe, no NVLink; no fp4).

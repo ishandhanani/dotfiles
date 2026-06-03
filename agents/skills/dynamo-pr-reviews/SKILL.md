@@ -12,6 +12,15 @@ Empirical, end-to-end workflow for testing an `ai-dynamo/dynamo` PR and leaving 
 
 Sibling skill: `sglang-pr-review` (pure SGLang). This one is for the Dynamo serving layer; it brings up the full frontend + worker stack.
 
+## Boundaries — read-only on the PR
+
+This skill **tests and reviews**; it never changes the PR. The PR author owns every code change.
+
+- **Never** commit/push to the PR branch or the author's fork, never force-push, never apply suggestions or `gh pr` mutations (no edit, no commit-to-branch, no merge/close). You are a reviewer, not a committer.
+- Any local edits needed to get the build/test running are **throwaway** — discarded at cleanup, never pushed anywhere.
+- The **only** outbound action is leaving a review *comment* (findings + evidence), and **only after the user explicitly approves sharing it**. Default to producing the review locally and prompting the user to share.
+- If you find a fix, **describe it in the review** for the author to apply — do not apply it for them.
+
 ## Hardware fit — check first
 
 Default target: **1× L4** (~24 GB, Ada sm_89, single GPU). `agg.sh` is single-GPU aggregated serving.
