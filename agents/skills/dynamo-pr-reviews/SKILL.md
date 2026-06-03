@@ -83,14 +83,11 @@ export LD_LIBRARY_PATH=/usr/local/cuda-13.0/lib64:${LD_LIBRARY_PATH:-}
 ```
 Permanent fix: add the above exports to `~/.bashrc`.
 
-**Python 3.12 compatibility**: `huggingface_hub>=0.34.0` has a `str | None` bug on Python 3.12. Patch it:
-```python
-# Add to huggingface_hub/dataclasses.py after _BASIC_TYPE_VALIDATORS dict:
-import types as _types
-if hasattr(_types, "UnionType"):
-    _BASIC_TYPE_VALIDATORS[_types.UnionType] = _validate_union
+**huggingface_hub version**: transformers 5.6.0 requires `huggingface_hub>=1.5.0,<2.0`. Install it explicitly before `uv pip install -e .` to prevent uv from resolving to an incompatible version:
+```bash
+uv pip install "huggingface_hub>=1.5.0,<2.0"
 ```
-File: `<venv>/lib/python3.12/site-packages/huggingface_hub/dataclasses.py` around line 474.
+Do NOT downgrade huggingface_hub below 1.5.0 — transformers 5.6.0 imports `is_offline_mode` from it, which was removed in the 0.33.x/0.34.x range.
 
 **SGLang version**: Always install the exact version pinned in `pyproject.toml`:
 ```bash
@@ -217,6 +214,52 @@ Keep the concrete responses / log lines / numbers — they go in the review verb
 
 Summarize to the user first: what works (with evidence), what's broken/risky (`file:line` + evidence + severity), recommendation. **Do not post to GitHub until the user approves.**
 
+### When to post a review comment
+
+**Only post a review comment if something failed, looks risky, or you have a question.** If the PR is clean and all tests pass, do not post anything — just report the verdict to the user and move on.
+
+- All tests pass, no concerns → **no comment on GitHub**, just tell the user "clean, approved"
+- Test failure, bug found, or design concern → post a comment with the finding
+- Unclear about author's intent → **ask the user first** before posting any question to the author
+
+**Always clear questions with the user before posting them as review comments.** Never ask the PR author something directly without the user's explicit approval.
+
+### Review comment template
+
+Use this template when you DO need to post a comment. The `<details>` dropdown keeps verbose evidence out of the main view:
+
+```markdown
+## Review Summary
+
+**Verdict:** Approve / Request changes / Comment
+
+<One-paragraph summary of what the PR does and the overall assessment.>
+
+### Testing Results
+
+| Test | Result |
+|------|--------|
+| Unit tests | **X/Y passed** |
+| E2E: <feature> (non-streaming) | Pass/Fail + brief note |
+| E2E: <feature> (streaming) | Pass/Fail + brief note |
+| E2E: Normal request (no <feature>) | Pass/Fail + brief note |
+| Load test (aiperf, N req, M concurrency) | Pass/Fail + throughput |
+| Server logs | Clean / Issues |
+
+<details>
+<summary>Evidence</summary>
+
+```
+Paste concrete evidence here: curl responses, aiperf summary table, log lines, etc.
+```
+
+</details>
+
+### Code Review
+
+<Bullet points of findings — one per issue or positive observation. Include file:line references.>
+```
+
 **IMPORTANT: Always create a DRAFT review first.** GitHub does not allow deleting submitted reviews (only pending/draft ones). Create the review as a draft, confirm with the user, then submit it.
 
 Once approved:
@@ -266,7 +309,7 @@ If Rust was rebuilt for the PR, a `maturin develop --uv` on the restored branch 
 ## Pitfalls
 
 1. **CUDA PATH**: `/usr/bin/nvcc` is CUDA 11.5, but CUDA 13.0 is at `/usr/local/cuda-13.0/`. Always prepend that to PATH. `nvcc fatal: Unsupported gpu architecture 'compute_89'` = this issue.
-2. **huggingface_hub Python 3.12**: `str | None` syntax in dataclass fields causes `StrictDataclassFieldValidationError`. Patch `_BASIC_TYPE_VALIDATORS` to include `types.UnionType`.
+2. **huggingface_hub version**: transformers 5.6.0 requires `huggingface_hub>=1.5.0,<2.0`. Install it explicitly before `uv pip install -e .`. Do NOT downgrade below 1.5.0 — `is_offline_mode` was removed in the 0.33.x/0.34.x range and transformers imports it directly.
 3. **kernels package**: `transformers` may pull in incompatible `kernels` versions. Pin to `kernels>=0.6.1,<=0.9` if needed.
 4. **SGLang version**: Always use the version pinned in `pyproject.toml`. Don't let `uv` resolve to a different version.
 5. **Flaky first runs**: Model inference on first run may show different results due to KV cache warm-up. Always run 2-3 times before reporting failures.
