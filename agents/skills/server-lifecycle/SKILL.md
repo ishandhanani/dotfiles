@@ -1,153 +1,171 @@
 ---
 name: server-lifecycle
-description: Launch an inference server, run benchmarks, and clean up. Handles the full lifecycle of server + load generator + results collection.
+description: "Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, configure first-class telemetry/observability, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane."
 user-invocable: true
 ---
 
-# Server Lifecycle Management
+# Server Lifecycle
 
-Manages the full cycle: kill stale -> launch -> health check -> benchmark -> collect results -> kill.
+Use `srt-slurm` as the unified control plane for server lifecycle work. YAML is the durable benchmark definition and rendered bash is the execution artifact. Do not maintain a separate hand-written launch script for the same benchmark unless it is temporary local validation glue.
 
-Works with any inference server (SGLang, vLLM, TRT-LLM, etc.). Project-specific args come from the project's `CLAUDE.md` (or `AGENTS.md` symlink) or `~/memory/<project>/INDEX.md`.
+Use this workflow for SGLang/Dynamo/vLLM/TRT-LLM benchmark recipes, local smoke runs, SLURM jobs, `srtctl apply --bash`, AIPerf, and srt-slurm telemetry.
 
-## Step 1: Clean Environment
+## Source Of Truth
 
-Kill any stale processes from previous runs:
+- Author or update `srt-slurm` YAML first.
+- Validate renderer behavior with `srtctl dry-run` and `srtctl apply --bash`.
+- If the rendered bash is missing lifecycle behavior, fix the renderer/templates in `srt-slurm`; do not work around it with a second long-lived shell script.
+- Use local bash only to test a launch pattern before encoding it in YAML or renderer logic.
+
+## Orient
+
+Before editing:
 
 ```bash
-pkill -9 -f sglang 2>/dev/null
-pkill -9 -f vllm 2>/dev/null
-pkill -9 -f aiperf 2>/dev/null
-sleep 3
-nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+git status --short
+rg -n "benchmark:|run_benchmark|apply --bash|lifecycle|telemetry|observability|aiperf" src tests recipes examples
+rg --files recipes examples | rg 'sglang|dynamo|vllm|trtllm'
 ```
 
-Verify GPU memory is free. If not, find and kill the holding process:
-```bash
-nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader
+Read the closest existing recipe and backend launch script. For Dynamo/SGLang, inspect `examples/backends/sglang/launch/{agg,disagg}.sh` in the Dynamo checkout when available, especially its traps and process cleanup.
+
+## YAML Recipe Rules
+
+For benchmark YAMLs:
+
+- Put model identity, topology, backend config, and benchmark command in YAML.
+- Use `benchmark.type: custom` for inline AIPerf until a first-class benchmark type exists.
+- Keep artifact paths deterministic with `AIPERF_ARTIFACT_DIR`, `--output-artifact-dir`, and `--profile-export-prefix`.
+- Always pass `--ui none`.
+- Usually pass `--no-server-metrics` when `srt-slurm` telemetry owns metrics. This avoids SGLang nullable Prometheus metric issues and keeps AIPerf focused on request records.
+- For local shared-node disagg in `srt-slurm`, use the repo's shared-node convention, for example `decode_nodes: 0` when decode shares the prefill node.
+- For SGLang disagg, put connector/backend flags in `backend.sglang_config.prefill` and `.decode` using the repo's schema. Validate with `dry-run`; do not guess unsupported YAML keys.
+
+## Telemetry And Observability
+
+Use first-class `srt-slurm` config. Do not embed raw tachometer/scraper commands in benchmark YAML.
+
+- `telemetry:` is the metrics scraper path. It generates `telemetry_config.toml`, starts DCGM/node exporters, scrapes backend/frontend metrics from the rendered topology, and stores artifacts under `logs/<storage_subdir>`.
+- `observability:` is for OTEL tracing env injection (`enable_otel`, `otel_endpoint`), not metrics scraping.
+- Resolve `container_image`, `dcgm_exporter.container_image`, and `node_exporter.container_image` through `srtslurm.yaml` container aliases when possible.
+
+Telemetry YAML shape:
+
+```yaml
+telemetry:
+  enabled: true
+  container_image: "telemetry-scraper"
+  storage_subdir: "telemetry"
+  default_frequency: 1.0
+  sync_interval_secs: 0
+  dcgm_exporter:
+    container_image: "dcgm-exporter"
+    port: 9401
+  node_exporter:
+    container_image: "node-exporter"
+    port: 9101
 ```
 
-## Step 2: Launch Server
+Optional OTEL tracing:
 
-Determine project context:
-1. Check user prompt or cwd for project identity
-2. Read the project's `CLAUDE.md` (or `AGENTS.md` symlink) and `~/memory/<project>/INDEX.md` for launch args
-3. Activate the project's venv
-
-Launch as background task. Poll for health:
-```bash
-for i in $(seq 1 60); do
-  curl -s localhost:${PORT}/health 2>/dev/null && echo " Server ready" && break
-  sleep 5
-done
+```yaml
+observability:
+  enable_otel: true
+  otel_endpoint: "http://<otel-collector>:4317"
 ```
 
-If no health endpoint, fall back to checking `/v1/models` or process status.
+For standalone `--bash` lifecycle behavior, use the renderer's built-in telemetry hooks and controls (`SRTCTL_ENABLE_TACHOMETER`, `SRTCTL_REQUIRE_TACHOMETER`, `SRTCTL_TACHOMETER_ARGS`) only when debugging that path. Prefer YAML-level `telemetry:` for normal recipes.
 
-### Launch Script Pattern (optional)
+Inline AIPerf command shape:
 
-Use a self-contained launch script instead of inline commands when:
-- Multiple processes need coordinating (e.g. Dynamo frontend + prefill + decode workers)
-- You need clean signal-based shutdown across a process group
-- The launch is complex enough that inline commands are unwieldy
-
-For simple single-process launches (one sglang server, one aiperf run), inline commands are fine.
-
-When using this pattern:
-1. Write the script with the trap template below
-2. Save to `/tmp/launch_<name>.sh` or the project's benchmarks dir
-3. Run with `bash /tmp/launch_<name>.sh &`
-
-```bash
-#!/bin/bash
-set -e
-
-LOG_FILE="/tmp/server_$(date +%Y%m%d_%H%M%S).log"
-
-cleanup() {
-    echo "Cleaning up..."
-    kill $SERVER_PID 2>/dev/null || true
-    wait $SERVER_PID 2>/dev/null || true
-    echo "Done. Logs: $LOG_FILE"
-}
-trap cleanup EXIT INT TERM
-
-# Launch server, tee to log file
-python -m sglang.launch_server \
-  --model-path <model> \
-  --port <port> \
-  <flags> 2>&1 | tee "$LOG_FILE" &
-SERVER_PID=$!
-
-# Health check
-for i in $(seq 1 60); do
-  curl -s localhost:<port>/health 2>/dev/null && echo "Server ready" && break
-  sleep 5
-done
-
-wait $SERVER_PID
+```yaml
+benchmark:
+  type: "custom"
+  command: |
+    set -euo pipefail
+    ARTIFACT_DIR="${AIPERF_ARTIFACT_DIR:-/logs/aiperf/smoke}"
+    mkdir -p "$ARTIFACT_DIR"
+    aiperf profile Qwen/Qwen3-0.6B \
+      --url http://localhost:8000 \
+      --endpoint-type chat \
+      --streaming \
+      --concurrency "${AIPERF_CONCURRENCY:-2}" \
+      --request-count "${AIPERF_REQUEST_COUNT:-8}" \
+      --warmup-request-count "${AIPERF_WARMUP_REQUEST_COUNT:-1}" \
+      --isl "${AIPERF_ISL:-128}" \
+      --osl "${AIPERF_OSL:-32}" \
+      --image-batch-size 0 \
+      --audio-batch-size 0 \
+      --video-batch-size 0 \
+      --request-timeout-seconds 300 \
+      --tokenizer-trust-remote-code \
+      --output-artifact-dir "$ARTIFACT_DIR" \
+      --profile-export-prefix smoke \
+      --ui none \
+      --no-server-metrics
 ```
 
-Benefits:
-- Signal-safe cleanup (no orphaned GPU processes)
-- Logs always in `/tmp/` for debugging (`grep`, `tail -f`, etc.)
-- Script is saveable and re-runnable
-- Extensible for multi-process (frontend + workers) with multiple PIDs
-- Replaces blind `pkill -9` with targeted PID cleanup
+## Render And Validate
 
-## Step 3: Run Benchmark
+Run these before any real execution:
 
-Use the appropriate benchmark script or aiperf command. Always:
-- Run **baseline first**, then **treatment**
-- If results matter, run **both orderings** (A/B then B/A) to control for ordering bias
-- Use a **fresh server** for each phase (kill + relaunch between phases)
-- Save results to `~/memory/<project>/benchmarks/results/` (or wherever the project INDEX.md specifies)
-
-Example with aiperf:
 ```bash
-cd ~/aiperf
-uv run aiperf profile <model> \
-  --url http://localhost:${PORT} \
-  --endpoint-type chat \
-  --input-file <dataset> \
-  --custom-dataset-type multi-turn \
-  --concurrency 16 \
-  --streaming \
-  --request-timeout-seconds 300 \
-  --output-artifact-dir ~/memory/<project>/benchmarks/results/ \
-  --ui none \
-  --no-server-metrics
+uv run srtctl dry-run -f path/to/config.yaml
+uv run srtctl apply -f path/to/config.yaml --bash > /tmp/srtctl_rendered.sh
+bash -n /tmp/srtctl_rendered.sh
 ```
 
-AIPerf defaults for agent-run benchmarks:
-- Use `--ui none` for non-interactive runs so logs stay parseable and the benchmark never waits on a TUI.
-- Use `--no-server-metrics` when metrics are collected separately (tachometer, curl scrape, DCGM, etc.) or when the server's Prometheus payload is noisy/nullable. For SGLang, prefer tachometer or direct `/metrics` capture over AIPerf's server-metrics collector.
-- Keep `--output-artifact-dir` and `--profile-export-prefix` explicit so JSON/CSV/log paths are deterministic.
-
-## Step 4: Collect and Verify
+For PRs touching renderer behavior, add or update tests around the rendered script:
 
 ```bash
-# Check metrics during run (adjust grep patterns per server)
-curl -s localhost:${PORT}/metrics | grep -E 'cache|hit|evict|request' | grep -v '^#'
+uv run pytest tests/test_lifecycle_render.py tests/test_submit_cli.py -q
 ```
 
-If `tachometer-scraper` is available, run it as the metrics collector and stop it with SIGINT so it writes `final.parquet`:
+Use `make check` when changes touch shared schema, CLI, topology, or backend rendering.
+
+## Rendered Bash Requirements
+
+The rendered bash should handle the lifecycle end to end:
+
+- `set -Eeuo pipefail`.
+- Trap `EXIT INT TERM`.
+- Start server process(es), save PIDs, and clean by PID/process group.
+- Use `setsid` around child launch scripts that trap `kill 0`, such as Dynamo example launchers, so their cleanup cannot kill the parent lifecycle runner.
+- Avoid broad server `pkill`; list candidates first and narrow cleanup to user-owned benchmark processes, known launch scripts, model, or ports.
+- Wait for real readiness. `/health` and `/v1/models` are not enough for Dynamo/SGLang; send a tiny chat completion before AIPerf.
+- Treat metrics endpoints as generated/configured by `telemetry:`. For disagg, the telemetry config should include every backend/frontend endpoint from topology.
+- Start configured telemetry before load and stop it during lifecycle cleanup.
+- Run the benchmark command after readiness.
+- Verify AIPerf JSON before reporting numbers.
+- Verify GPU/process cleanup after each phase.
+
+If any item is missing, patch the `srt-slurm` renderer/template rather than adding a parallel script to the recipe.
+
+## AIPerf Flags
+
+Find flags from the installed version:
+
 ```bash
-tachometer-scraper \
-  --endpoint worker=http://localhost:${METRICS_PORT}/metrics \
-  --storage "${ARTIFACT_DIR}/tachometer/run" \
-  --local-dir "${ARTIFACT_DIR}/tachometer-local" \
-  --freq 1.0 \
-  --save-interval 2 \
-  --sync-interval 0 &
-TACHOMETER_PID=$!
-# ...run benchmark...
-kill -INT "$TACHOMETER_PID"; wait "$TACHOMETER_PID" 2>/dev/null || true
+aiperf profile --help | sed -n '1,220p'
+rg -n "no-server-metrics|output-artifact-dir|profile-export-prefix|ui" ~/aiperf 2>/dev/null || true
 ```
 
-Verify AIPerf JSON before trusting numbers:
+Defaults for agent-run `srt-slurm` benchmarks:
+
+- Smoke: concurrency 1-2, request count 5-10, warmup 1.
+- Load: concurrency 16-32, fresh server per phase.
+- Always `--ui none`.
+- Usually `--no-server-metrics` when `srt-slurm` telemetry is enabled.
+- Always explicit `--output-artifact-dir` and `--profile-export-prefix`.
+- Use `--tokenizer-trust-remote-code` for HF models that need it.
+- If exact OSL matters, add server-supported `ignore_eos` or `min_tokens`; `--osl` alone may not force generation length.
+
+## Result Verification
+
+Verify AIPerf JSON:
+
 ```bash
-python3 - "${ARTIFACT_DIR}/aiperf.json" <<'PY'
+python3 - "$ARTIFACT_DIR/smoke.json" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 error_counts = data.get("error_request_count") or {}
@@ -158,37 +176,46 @@ assert error_total == 0, error_counts
 PY
 ```
 
-After collecting results, invoke `/memory-log` to record findings.
+Verify telemetry artifacts when `telemetry.enabled`:
 
-## Step 5: Cleanup
-
-If a launch script was used, cleanup is already handled by the trap -- just kill the script process or send SIGTERM and it will clean up its children.
-
-For orphaned or unknown processes, fall back to `pkill`:
 ```bash
-pkill -9 -f sglang 2>/dev/null
-pkill -9 -f vllm 2>/dev/null
-pkill -9 -f aiperf 2>/dev/null
-sleep 2
-nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+test -f "$LOG_DIR/telemetry_config.toml"
+test -d "$LOG_DIR/telemetry"
+find "$LOG_DIR/telemetry" -type f | head
 ```
 
-## Datasets
+Report:
 
-All in `~/datasets/`:
-- `long_multiturn_opus.jsonl` -- 10 synthetic multi-turn sessions (flood/eviction workload)
-- `claude_history_sonnet.jsonl` -- single real Claude Code session (VIP workload)
-- `claude_history_10_sessions.jsonl` -- 10 real sessions, 585 turns
-- `claude_history_10_sessions_with_thinking.jsonl` -- same with thinking blocks
+- Artifact root.
+- AIPerf request count, error/cancel state, TTFT, latency, ITL, throughput.
+- Telemetry storage path, endpoint names from `telemetry_config.toml`, and scraper/exporter log status.
+- GPU memory/process cleanup state.
 
-### aiperf Concurrency Guidelines
+## Cleanup
 
-- Quick smoke test: `--concurrency 1 --request-count 5`
-- Standard load test: `--concurrency 16-32`
-- Stress test: `--concurrency 64`
+Before launch, list candidate stale processes and only kill known benchmark-owned processes:
 
-## Notes
+```bash
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf profile|[t]elemetry-scraper|[d]cgm-exporter|[n]ode_exporter' || true
+pkill -9 -u "$USER" -f '[a]iperf profile' 2>/dev/null || true
+# Only after confirming they belong to this benchmark:
+# pkill -TERM -u "$USER" -f 'path/to/launch.sh|--port 8000|--model-path Qwen/Qwen3-0.6B' 2>/dev/null || true
+sleep 3
+nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+```
 
-- If server hangs with no errors logged, check for silent scheduler spin
-- aiperf repo has its own agent instructions (`CLAUDE.md` or `AGENTS.md` symlink) with architecture details -- read them if making aiperf changes
-- Server-specific flags (mem fractions, cache ratios, TP size) belong in the project's agent instructions, not here
+After each phase:
+
+```bash
+nvidia-smi --query-gpu=index,name,memory.used,memory.total --format=csv,noheader
+pgrep -afu "$USER" '[s]glang|[d]ynamo|[v]llm|[t]rtllm|[a]iperf|[t]elemetry-scraper|[d]cgm-exporter|[n]ode_exporter' || true
+```
+
+## Memory
+
+After meaningful benchmark results or renderer decisions, invoke `/memory-log` and include:
+
+- Config path and commit.
+- Render/validation commands.
+- Artifact root.
+- Key metrics and cleanup state.
