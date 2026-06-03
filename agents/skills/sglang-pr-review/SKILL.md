@@ -122,6 +122,17 @@ gh api --method POST repos/sgl-project/sglang/pulls/$PR/reviews --input /tmp/rev
 - Default to `event: "COMMENT"` — only Approve / Request-changes if the user asks for a verdict.
 - Evidence in comments stays plain SGLang output. Be concrete and kind.
 
+## Step 7 — Persist the review to memory
+
+File the review under the `sglang-pr-reviews` umbrella project in `~/memory` (one subfolder per PR — keeps these out of the memory root):
+
+```bash
+DIR=~/memory/sglang-pr-reviews/$PR-<slug>      # e.g. 26976-tiered-cached-token
+mkdir -p "$DIR"
+# write $DIR/review.md: PR + branch, test setup, evidence (logs/metrics/aiperf), findings, posted-review link, verdict
+```
+Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `INDEX.md`), `python3 ~/memory/scripts/lint_memory.py`, and commit `cd ~/memory && git add -A && git commit -m "sglang-pr-reviews: add #$PR review" && git push`.
+
 ## Cleanup
 
 `pkill -9 -f sglang`. The throwaway `/ephemeral/sglang-pr-$PR` + its venv can be removed when done (ask before deleting if disk isn't tight).
