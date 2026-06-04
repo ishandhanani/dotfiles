@@ -66,7 +66,6 @@ source .venv/bin/activate
 Read the diff and plan:
 ```bash
 gh pr diff $PR --repo ai-dynamo/dynamo | tee /tmp/dyn-pr-$PR.diff
-gh pr diff $PR --repo ai-dynamo/dynamo --name-only
 ```
 Note whether the diff touches **Rust** (`lib/**/*.rs`, `*/Cargo.toml`) or is **Python-only** — it decides the build in Step 2. Form concrete expectations (what should change in responses / logs / metrics / perf) and grep for any caller the diff might have missed.
 
@@ -315,3 +314,5 @@ If Rust was rebuilt for the PR, a `maturin develop --uv` on the restored branch 
 5. **Flaky first runs**: Model inference on first run may show different results due to KV cache warm-up. Always run 2-3 times before reporting failures.
 6. **A/B testing**: Use separate worktrees + venvs, not shared environments. Sequential comparison (streaming vs non-streaming on same server) is cheaper and more reliable than running two servers.
 7. **Environment issues are not PR issues**: If the server won't start due to CUDA/Python/dependency problems, diagnose the environment first. Don't attribute environment breakage to the PR.
+8. **SglangTool.model_dump() vs raw dicts**: When a PR changes tool serialization from `copy.deepcopy(raw_tools)` to `SglangTool.model_dump()`, the output structure differs: `strict` is always present (defaults to `false` even when the raw input omits it), and `defer_loading: null` is added at the top level of each tool. These extra fields are generally benign — `false` is semantically equivalent to absent for boolean checks, and `defer_loading` is SGLang-specific that chat templates ignore. Verify empirically with `curl` that tool calling still works, but don't flag these structural differences as bugs.
+9. **Streaming test client disconnects**: When testing streaming endpoints, avoid piping `curl` output to `head` or other commands that disconnect early — this triggers a `cancelled before completion` error in Dynamo's logs that looks like a server bug but is actually just the client hanging up. Use `curl -s ... | grep "^data:" | tail -N` or let the stream complete naturally.
