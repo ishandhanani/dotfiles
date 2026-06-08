@@ -126,5 +126,21 @@ backup_if_needed "$CODEX_DIR/AGENTS.md" "$HOME/.codex-backup-${TIMESTAMP}"
 ln -sfn "$CODEX_DIR/CLAUDE.md" "$CODEX_DIR/AGENTS.md"
 echo "Linked $CODEX_DIR/AGENTS.md -> $CODEX_DIR/CLAUDE.md"
 
+# Hermes discovers skills natively via skills.external_dirs (no per-skill
+# symlinks). Point it at this repo's skills dir if hermes is installed.
+configure_hermes() {
+    if ! command -v hermes >/dev/null 2>&1; then
+        echo ""
+        echo "hermes not on PATH -- skipping hermes skills config."
+        return
+    fi
+    echo ""
+    echo "Setting up hermes config..."
+    echo "-----------------------------"
+    hermes config set skills.external_dirs "$SKILLS_SRC"
+}
+
+configure_hermes
+
 echo ""
 echo "Setup complete."

@@ -55,7 +55,12 @@ source .venv/bin/activate
 uv pip install nixl maturin
 ```
 
-> **Important:** Always `source .venv/bin/activate` first, or `uv pip install` may target a different venv.
+> **Important:** Always `source .venv/bin/activate` first, or `uv pip install` resolves to the currently-active Python (Hermes' own venv or system Python), NOT the project `.venv`.
+>
+> ```bash
+> uv pip install nixl maturin                                # WRONG — may hit Hermes venv
+> source .venv/bin/activate && uv pip install nixl maturin   # RIGHT
+> ```
 
 ## Step 4: Build the Rust Python bindings
 
@@ -85,6 +90,13 @@ sudo apt-get install -y protobuf-compiler
 sudo apt-get install -y libclang-dev
 export LIBCLANG_PATH=/usr/lib/llvm-14/lib   # adjust path as needed
 ```
+
+**cmake (if a C dep needs it):**
+```bash
+sudo apt-get install -y cmake
+```
+
+> **patchelf warning is non-fatal.** `Warning: Failed to set rpath ... Failed to execute 'patchelf'` does not block the build — the wheel installs fine. Only if it actually fails: `uv pip install maturin[patchelf]`.
 
 ## Step 5: Install Dynamo in editable mode
 
