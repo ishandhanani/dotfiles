@@ -14,6 +14,39 @@ Companion to `dynamo-pr-reviews`. Only runs on PRs the user explicitly approved.
 
 User must approve the PR for merge and confirm babysitter should start.
 
+## Delivery — Always Reply in the Origin Thread
+
+**Every message about a PR goes to the thread where the user kicked off babysitting for that PR — never the bare channel.** Each PR carries its own `delivery_target` in the state file; all updates for that PR (status, triage, questions, green/merged) are sent there. This holds whether the current run is interactive or a cron tick.
+
+**Capture the target at kickoff (interactive run).** When the user asks to babysit a PR, the session env exposes the origin thread. Build the target and store it on the PR's state entry:
+
+```bash
+# Set by the gateway for any chat-originated session (empty under cron)
+if [ -n "$HERMES_SESSION_THREAD_ID" ]; then
+    DELIVERY_TARGET="slack:${HERMES_SESSION_CHAT_ID}:${HERMES_SESSION_THREAD_ID}"
+elif [ -n "$HERMES_SESSION_CHAT_ID" ]; then
+    DELIVERY_TARGET="slack:${HERMES_SESSION_CHAT_ID}"          # DM / no thread
+else
+    DELIVERY_TARGET="slack:C0B7XL5D29K"                        # fallback: PR review channel
+fi
+```
+
+Persist it as `delivery_target` in the PR's entry in `~/.hermes/state/pr-babysitter.json` (see State File).
+
+**Reuse the target on every notification (interactive OR cron).** Cron ticks have no session env, so the stored value is the only source of truth. For each PR, read its `delivery_target` from state and deliver with `hermes send`:
+
+```bash
+DELIVERY_TARGET=$(jq -r --argjson n "$PR" \
+  '.active[] | select(.number==$n) | .delivery_target // "slack:C0B7XL5D29K"' \
+  ~/.hermes/state/pr-babysitter.json)
+
+hermes send --to "$DELIVERY_TARGET" --subject "PR #$PR" "<message>"
+```
+
+Wherever a step below says "report to user", "notify", or "ask the user", it means **`hermes send --to "$DELIVERY_TARGET"`** for that PR — not a reply in the main channel.
+
+**Under cron, return SILENT.** Because notifications are delivered explicitly via `hermes send` to each PR's thread, the agent's final output must be the empty string (`SILENT`). Otherwise the cron's static `deliver` channel gets a duplicate copy in the main channel — the exact thing this avoids.
+
 ## Key Design: Triage First, Then Act
 
 **Always investigate a CI failure before deciding what to do.** The babysitter flow:
@@ -69,8 +102,7 @@ When CI fails, run this diagnostic before asking the user anything:
 
 - PR number (repo defaults to `ai-dynamo/dynamo`)
 - Worktree path for the PR
-- Slack channel: `C0B7XL5D29K` (PR review channel)
-- **Thread ID**: If the user asked to babysit from within a Slack thread, capture the thread_id and use it as the delivery target so CI updates land in the same thread. Format: `slack:<channel_id>:<thread_id>`. If not in a thread, use `slack:<channel_id>`.
+- **Delivery target (REQUIRED)**: at kickoff, capture the origin thread from the session env and store it as `delivery_target` on the PR's state entry, per the [Delivery](#delivery--always-reply-in-the-origin-thread) section. Every later update for this PR — including cron ticks — is sent there. Fallback only if no thread is available: `slack:C0B7XL5D29K` (PR review channel).
 
 ## Step 1 — Setup Worktree
 
@@ -108,6 +140,8 @@ fi
 - **CI_GREEN** → Go to Step 5 (notify user, done)
 - **CI_PENDING** → Report "CI still pending, will check next cycle", exit
 - **CI_FAILED** → Go to Step 2a (CI Failure Triage)
+
+> **Note**: The skill is designed to be run repeatedly (e.g., via cron) where each invocation checks status and takes appropriate action. For cases where immediate continuous monitoring is requested (rather than periodic checks via cron), consider invoking the skill's "Wait for CI" logic directly (Step 4) or using a dedicated monitoring script that loops until completion.
 
 ## Step 2a — CI Failure Triage
 
@@ -225,7 +259,10 @@ Up to 30 minute total timeout across all polls. **Exit code note:** `gh pr check
    gh pr merge <number> --repo <repo> --squash --delete-branch --auto --subject "<title> (#<number>)"
    ```
    If `--auto` fails with "not mergeable", try `--admin` only if the user has admin access and approves.
-2. Notify user in slack: "PR #<N> CI is green. Merged: <link>"
+2. Notify the PR's thread (see [Delivery](#delivery--always-reply-in-the-origin-thread)):
+   ```bash
+   hermes send --to "$DELIVERY_TARGET" --subject "PR #$PR" "CI is green. Merged: <link>"
+   ```
 3. Remove from active list, clean up worktree
 
 **Failed:**
@@ -259,6 +296,7 @@ git worktree remove /ephemeral/dynamo-wt/pr-$PR --force 2>/dev/null || true
       "url": "https://github.com/ai-dynamo/dynamo/pull/12345",
       "branch": "fix/some-branch",
       "worktree": "/ephemeral/dynamo-wt/pr-12345",
+      "delivery_target": "slack:C0B7XL5D29K:1780495420.954799",
       "fork_remote": "fork-Muqi1029",
       "fork_url": "https://github.com/Muqi1029/dynamo.git",
       "iterations": 0,
@@ -273,6 +311,7 @@ git worktree remove /ephemeral/dynamo-wt/pr-$PR --force 2>/dev/null || true
 ```
 
 **Fields:**
+- `delivery_target`: where all updates for this PR are sent — the origin thread captured at kickoff (`slack:<channel>:<thread_id>`). Required. Cron ticks read this since they have no session env. Falls back to `slack:C0B7XL5D29K` if absent.
 - `fork_remote` / `fork_url`: only present for fork PRs. Use `fork_remote` as the push target.
 - `iterations`: incremented each merge-push-CI cycle.
 - `last_sha`: updated after each push.
