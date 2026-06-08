@@ -28,10 +28,11 @@
 
 ### Cron configuration
 
-- Schedule: `every 30m` (was `every 120m`)
+- Schedule: `every 15m` (was `every 30m`, was `every 120m`) — tighter latency on catching CI changes
 - Skills: `["pr-babysitter"]` (NOT `"github"`)
-- Deliver: `slack:C0B7XL5D29K` (PR review channel, was `C0B833HF4NM`)
+- Deliver: `slack:C0B7XL5D29K` (PR review channel fallback, was `C0B833HF4NM`). Actual per-PR updates go to each PR's `delivery_target` thread via `hermes send`; the agent returns SILENT so this static channel gets no duplicate.
 - State file: `~/.hermes/state/pr-babysitter.json`
+- **Each tick is non-blocking**: check current CI status, take one action, exit. Do NOT block in Step 4's 30-min wait loop under cron — the next tick re-checks. This keeps runs short so 15m ticks never overlap (there is no same-job re-entry lock).
 
 ### Delivery errors
 
