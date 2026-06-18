@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser Snapshot"
+  short_description: "Capture browser UI screenshots reliably"
+  default_prompt: "Use $browser-snapshot to open the page and capture a visual snapshot."
