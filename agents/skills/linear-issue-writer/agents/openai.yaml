@@ -1,0 +1,4 @@
+interface:
+  display_name: "Linear Issue Writer"
+  short_description: "Write smaller Linear issues"
+  default_prompt: "Use $linear-issue-writer to collapse scope, draft the Linear issue, and wait for approval before creating or updating it."

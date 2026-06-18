@@ -1,0 +1,4 @@
+interface:
+  display_name: "GH PR Description"
+  short_description: "Keep PR descriptions concise"
+  default_prompt: "Use $gh-pr-description to update the PR description while preserving existing content."
