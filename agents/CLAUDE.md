@@ -57,6 +57,9 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Branch naming: `idhanani/dyn-{ticket-number}-{short-description}`
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.
 - Worktrees for parallel branch development. On rebase conflicts: preserve local work first (`git stash` or backup branch), then resolve. Don't force-reset without asking.
+- For Dynamo and SGLang worktrees, do not push branches or forks unless I explicitly say to push.
+- Default to local targeted commits as work progresses: one logical change per commit after validation.
+- When creating or updating a PR body, use the `gh-pr-description` skill so existing descriptions are preserved and kept concise.
 
 ### Testing
 - **Smoke first**: single worker, minimal dataset, validate correctness
