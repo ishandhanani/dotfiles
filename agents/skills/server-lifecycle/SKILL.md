@@ -1,7 +1,6 @@
 ---
 name: server-lifecycle
 description: "Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, configure first-class telemetry/observability, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane."
-user-invocable: true
 ---
 
 # Server Lifecycle
@@ -132,7 +131,8 @@ The rendered bash should handle the lifecycle end to end:
 - Start server process(es), save PIDs, and clean by PID/process group.
 - Use `setsid` around child launch scripts that trap `kill 0`, such as Dynamo example launchers, so their cleanup cannot kill the parent lifecycle runner.
 - Avoid broad server `pkill`; list candidates first and narrow cleanup to user-owned benchmark processes, known launch scripts, model, or ports.
-- Wait for real readiness. `/health` and `/v1/models` are not enough for Dynamo/SGLang; send a tiny chat completion before AIPerf.
+- Wait for real readiness. `/health` alone is not enough for Dynamo/SGLang; poll model readiness, then send a tiny chat completion before AIPerf.
+- Use `scripts/wait_for_openai_ready.py` to poll `/v1/models/<model>/ready` and optional `/health` instance counts before the tiny chat completion; do not benchmark just because the HTTP port is open.
 - Treat metrics endpoints as generated/configured by `telemetry:`. For disagg, the telemetry config should include every backend/frontend endpoint from topology.
 - Start configured telemetry before load and stop it during lifecycle cleanup.
 - Run the benchmark command after readiness.
@@ -140,6 +140,94 @@ The rendered bash should handle the lifecycle end to end:
 - Verify GPU/process cleanup after each phase.
 
 If any item is missing, patch the `srt-slurm` renderer/template rather than adding a parallel script to the recipe.
+
+## Readiness Helper
+
+Use the bundled helper instead of hand-writing curl/jq loops:
+
+```bash
+READY_SCRIPT="${READY_SCRIPT:-${CODEX_HOME:-$HOME/.codex}/skills/server-lifecycle/scripts/wait_for_openai_ready.py}"
+python3 "$READY_SCRIPT" --base-url "$BASE_URL" --model "$MODEL"
+python3 "$READY_SCRIPT" --base-url "$BASE_URL" --model "$MODEL" --expect-worker aggregated=1
+python3 "$READY_SCRIPT" --base-url "$BASE_URL" --model "$MODEL" --expect-worker prefill=1 --expect-worker decode=1
+```
+
+The helper prefers `GET /v1/models/<model>/ready`, which exposes model-level readiness and worker-type counts (`aggregated`, `prefill`, `decode`, `encode`). Use `--min-health-instances N` only as an extra liveness guard because `/health` lists discovery instances across endpoints, not model-specific readiness.
+
+## Bash Lifecycle Template
+
+Use this shape when the rendered lifecycle owns a local server process. Dynamo launch scripts often trap `EXIT` and call `kill 0`; run them in their own session so their cleanup only tears down their process group.
+
+```bash
+set -Eeuo pipefail
+
+MODEL="${MODEL:-Qwen/Qwen3-0.6B}"
+BASE_URL="${BASE_URL:-http://localhost:8000}"
+ARTIFACT_DIR="${AIPERF_ARTIFACT_DIR:-/tmp/aiperf-smoke}"
+SERVER_LOG="${SERVER_LOG:-/tmp/server.log}"
+READY_SCRIPT="${READY_SCRIPT:-${CODEX_HOME:-$HOME/.codex}/skills/server-lifecycle/scripts/wait_for_openai_ready.py}"
+SERVER_PID=""
+
+cleanup() {
+  local rc=$?
+  trap - EXIT INT TERM
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    echo "Stopping server process group -${SERVER_PID}"
+    kill -TERM "-${SERVER_PID}" 2>/dev/null || true
+    sleep 5
+    kill -KILL "-${SERVER_PID}" 2>/dev/null || true
+    wait "${SERVER_PID}" 2>/dev/null || true
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT INT TERM
+
+setsid /ephemeral/dynamo/examples/backends/sglang/launch/agg.sh \
+  --model-path "$MODEL" >"$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+
+smoke_chat() {
+  python3 - "$MODEL" >/tmp/server-smoke-request.json <<'PY'
+import json
+import sys
+
+print(json.dumps({
+  "model": sys.argv[1],
+  "messages": [{"role": "user", "content": "hello"}],
+  "max_tokens": 1,
+}))
+PY
+  curl -sf "$BASE_URL/v1/chat/completions" \
+    -H 'Content-Type: application/json' \
+    -d @/tmp/server-smoke-request.json >/tmp/server-smoke.json
+}
+
+python3 "$READY_SCRIPT" \
+  --base-url "$BASE_URL" \
+  --model "$MODEL" \
+  --expect-worker aggregated=1 \
+  --watch-pid "$SERVER_PID" \
+  --timeout "${MODEL_READY_TIMEOUT:-3600}" \
+  --interval "${MODEL_READY_SLEEP:-5}"
+smoke_chat
+
+mkdir -p "$ARTIFACT_DIR"
+aiperf profile "$MODEL" \
+  --url "$BASE_URL" \
+  --endpoint-type chat \
+  --streaming \
+  --concurrency "${AIPERF_CONCURRENCY:-2}" \
+  --request-count "${AIPERF_REQUEST_COUNT:-8}" \
+  --warmup-request-count "${AIPERF_WARMUP_REQUEST_COUNT:-1}" \
+  --isl "${AIPERF_ISL:-128}" \
+  --osl "${AIPERF_OSL:-32}" \
+  --request-timeout-seconds 300 \
+  --tokenizer-trust-remote-code \
+  --output-artifact-dir "$ARTIFACT_DIR" \
+  --profile-export-prefix smoke \
+  --ui none \
+  --no-server-metrics
+```
 
 ## AIPerf Flags
 
