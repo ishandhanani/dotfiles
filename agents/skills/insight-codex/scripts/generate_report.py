@@ -519,6 +519,8 @@ def analyze_session(path: Path) -> SessionSummary | None:
                 continue
             if payload_type == "function_call_output":
                 output = payload.get("output", "")
+                if not isinstance(output, str):
+                    output = json.dumps(output, sort_keys=True, default=str)
                 state.touched_extensions.update(find_touched_extensions(output))
                 match = EXIT_CODE_RE.search(output)
                 if match and int(match.group(1)) != 0:
