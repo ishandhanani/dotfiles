@@ -1,7 +1,6 @@
 ---
 name: scaffold-review
 description: Analyze conversation history, find gaps and drift in AGENTS/CLAUDE instructions and skills, propose and apply targeted improvements.
-user-invocable: true
 ---
 
 # Scaffold Review
@@ -41,13 +40,42 @@ Find conversations since last run (or last 14 days if first run), with sizes for
 
 !`if [ -d "$AGENT_HOME/projects" ]; then find "$AGENT_HOME/projects" -name '*.jsonl' -not -path '*/subagents/*' -mtime -14 -size +10k -exec ls -lh {} \; ; elif [ -d "$AGENT_HOME/sessions" ]; then find "$AGENT_HOME/sessions" -name '*.jsonl' -mtime -14 -size +10k -exec ls -lh {} \; ; fi | awk '{print $5, $9}' | sort -k2`
 
-**Budget check:** If total JSONL exceeds 5MB, split the corpus across agents rather than having each read everything.
+**Budget check:** If total JSONL exceeds 5MB, do not pass raw logs into model context. Run the bundled extractor first, then pass compact findings to any subagents.
 
 ---
 
 ## Step 2: Extract Signals
 
-Use **3 focused analyzers** in parallel. For Codex, these are parallel shell/Python extraction passes over JSONL, not separate agent sessions.
+Run the deterministic extractor before interpretation:
+
+```bash
+SCRIPT="$AGENT_HOME/skills/scaffold-review/scripts/extract_scaffold_signals.py"
+if [ ! -f "$SCRIPT" ]; then
+  SCRIPT="./agents/skills/scaffold-review/scripts/extract_scaffold_signals.py"
+fi
+SIGNALS="${TMPDIR:-/tmp}/scaffold-review-signals.json"
+python3 "$SCRIPT" --agent-home "$AGENT_HOME" --max-sessions 20 --format json --output "$SIGNALS"
+```
+
+Use `--format markdown` for a quick human-readable view, but keep the JSON file as the source for synthesis and subagents.
+
+The extractor streams JSONL and returns compact evidence:
+- correction candidates from real user turns
+- top tools, commands, files, and skill mentions
+- repeated workflow patterns with stability labels
+- recent session preambles
+- count of injected context blocks filtered out
+
+False-positive guardrails:
+- Ignore injected `AGENTS.md`, `CLAUDE.md`, `<skill>`, environment, permissions, app/plugin, subagent notification, and developer context blocks.
+- Count repeated evidence by session, not by raw mention count.
+- Treat generated reports as evidence sources, not user intent.
+- Exclude the active `CODEX_THREAD_ID` and subagent-created sessions by default. Include them only when intentionally reviewing the current run or subagent behavior.
+- Adjudicate correction candidates before acting. Drop initial task requests, brainstorming, and generic "should" statements unless they respond to prior assistant behavior.
+
+Use the extractor output as the shared source of truth for the analyzers below.
+
+For Codex, use subagents when the corpus is large, when the user asks for meta/parallel/subagent review, or when forward-testing a proposed scaffold change. Give each subagent the compact extractor output, sampled session list, current scaffold excerpt, and one narrow question. Do not send raw JSONL unless a specific evidence gap requires a targeted snippet.
 
 ### Agent 1: Corrections & Friction
 
@@ -88,49 +116,13 @@ Output: pattern list with stability ratings + gap analysis.
 
 ### Analyzer Rules (all analyzers)
 
-1. **Never read a full JSONL file.** Use `head -c 50000` or targeted grep extraction:
-   ```bash
-   # Codex user messages
-   python3 - <<'PY'
-   import json
-   for line in open("file.jsonl", errors="ignore"):
-       obj = json.loads(line)
-       if obj.get("type") != "response_item":
-           continue
-       payload = obj.get("payload", {})
-       if payload.get("type") != "message" or payload.get("role") != "user":
-           continue
-       parts = [block.get("text", "") for block in payload.get("content", []) if block.get("type") == "input_text"]
-       text = " ".join(parts)
-       if text:
-           print(text[:200])
-   PY
-
-   # Codex tool usage counts
-   grep '"type":"function_call"' file.jsonl | grep -o '"name":"[^"]*"' | sort | uniq -c | sort -rn | head -20
-
-   # Command prefixes from exec_command calls
-   python3 - <<'PY'
-   import json
-   from collections import Counter
-   counts = Counter()
-   for line in open("file.jsonl", errors="ignore"):
-       obj = json.loads(line)
-       if obj.get("type") != "response_item":
-           continue
-       payload = obj.get("payload", {})
-       if payload.get("type") != "function_call" or payload.get("name") != "exec_command":
-           continue
-       args = json.loads(payload.get("arguments", "{}"))
-       cmd = args.get("cmd", "").strip().splitlines()
-       if cmd:
-           counts[cmd[0].split()[0]] += 1
-   for name, count in counts.most_common(20):
-       print(count, name)
-   PY
-   ```
-2. **Max 15-20 conversations per analyzer.** Sample by recency if there are more.
-3. **Return structured findings in <300 lines.** Conclusions, not data dumps.
+1. Never load a full raw JSONL file into model context. The extractor may stream files locally; analyzers should consume compact output.
+2. Max 15-20 conversations per analyzer. Sample by recency if there are more.
+3. Return structured findings in <300 lines. Conclusions, not data dumps.
+4. When using subagents, split by interpretation lens, not by duplicating the same reading task:
+   - corrections/friction
+   - usage drift/dead references
+   - workflow structure/forward test
 
 ### Codex-Specific Notes
 
@@ -138,6 +130,7 @@ Output: pattern list with stability ratings + gap analysis.
 - Commentary and final answers are both assistant messages; use `payload.phase` when you need to separate progress updates from final responses.
 - Tool calls appear as `payload.type == "function_call"` with JSON-encoded `arguments`.
 - `write_stdin` polling loops are common in remote or long-running jobs; treat them as one workflow, not separate tasks.
+- The bundled extractor is the default Codex path; ad hoc `grep` is only for targeted evidence gaps.
 
 ---
 
@@ -185,10 +178,12 @@ Stale content, unused skills, dead references. Show evidence of staleness.
 Only if a crystallized workflow (5+ conversations) would clearly benefit from being a dedicated skill. Don't create skills speculatively.
 
 For each proposal, include:
+- **Target**: file:line
 - **Evidence**: which conversations, what frequency
 - **Current state**: what the scaffold says now (quote it)
-- **Proposed change**: the exact edit
+- **Proposed change**: add / replace / delete with exact patch-ready wording or a diff hunk
 - **Confidence**: high / medium / low
+- **Forward test**: one sentence explaining how the edit would change the next similar session
 
 Present all proposals to the user before applying.
 
@@ -226,6 +221,16 @@ EOF
 ```
 
 For deferred proposals, record the reason so a future run can reassess.
+
+Validate scaffold-review changes before finishing:
+
+```bash
+python3 "$SCRIPT" --agent-home "$AGENT_HOME" --max-sessions 3 --format json >/tmp/scaffold-review-signals.json
+VALIDATOR="$AGENT_HOME/skills/.system/skill-creator/scripts/quick_validate.py"
+if [ -f "$VALIDATOR" ]; then
+  python3 "$VALIDATOR" "$AGENT_HOME/skills/scaffold-review"
+fi
+```
 
 ---
 
