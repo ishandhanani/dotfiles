@@ -21,6 +21,7 @@ Use this skill to keep PR descriptions concise and stable. Fetch the existing bo
    - Keep implementation to 3-6 bullets.
    - Keep walkthrough inside a markdown `<details>` block.
    - Include validation, even if it is `Not run (reason)`.
+   - If associated with a Linear ticket, include `CLOSES: <TICKET-ID>`; do not add the full Linear URL.
    - Add a benchmark section at the bottom only when benchmark results were actually collected.
 4. Update the body.
    - If the body already has the managed markers, replace only that block.
@@ -37,6 +38,8 @@ Use exactly these hidden markers:
 ```md
 <!-- codex-pr-description:start -->
 Two-sentence intro. The second sentence should explain why the change matters.
+
+CLOSES: DYN-123
 
 ### How This Was Implemented
 - Short implementation bullet.

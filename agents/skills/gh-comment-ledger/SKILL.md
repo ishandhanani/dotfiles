@@ -1,11 +1,13 @@
 ---
 name: gh-comment-ledger
-description: Pull GitHub PR comments and review threads into a simple actionable markdown table before deciding what to fix. Use when the user asks to triage, ledger, table, summarize, classify, or selectively address PR comments/review feedback by row number.
+description: "First-pass workflow for GitHub PR comments and review threads: pull feedback into a simple actionable markdown table before deciding what to fix. Use before github:gh-address-comments when the user asks to review, triage, address, fix, summarize, classify, ledger, or selectively handle PR comments/review feedback."
 ---
 
 # GH Comment Ledger
 
 Use this skill to inspect GitHub PR feedback before editing. Default to read-only triage: fetch comments, build the ledger table, and wait for the user to choose rows unless they explicitly ask to fix all actionable rows.
+
+Routing rule: this skill owns the first pass for PR comments. Use `github:gh-address-comments` only after the ledger exists or when the user explicitly names that curated skill.
 
 This skill vendors the `gh-address-comments` GraphQL approach because flat PR comments do not preserve review-thread resolution state, outdated state, or inline anchors.
 

@@ -60,6 +60,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - For Dynamo and SGLang worktrees, do not push branches or forks unless I explicitly say to push.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
 - When creating or updating a PR body, use the `gh-pr-description` skill so existing descriptions are preserved and kept concise.
+- For GitHub PR comments/review feedback, use `gh-comment-ledger` first; use `github:gh-address-comments` only after the ledger exists or when explicitly requested.
 
 ### Testing
 - **Smoke first**: single worker, minimal dataset, validate correctness
