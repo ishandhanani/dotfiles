@@ -1,11 +1,13 @@
 ---
 name: linear-issue-writer
-description: Shape, draft, create, or update Linear issues with strict anti-slop structure. Use when the user asks to create Linear tickets, write DYN issues, split/collapse issue scope, turn a discussion into Linear work, update an existing issue, or decide whether a new issue is needed.
+description: Structure and draft Linear issue bodies, updates, and comments with strict anti-slop rules. Use when the user wants to write a Linear issue/update/comment or decide the shape of one; do not use for general Linear lookup, status checks, project browsing, or routine reads.
 ---
 
 # Linear Issue Writer
 
-Use this skill to avoid issue sprawl and bloated ticket bodies. Default to one issue, draft first, and write to Linear only after explicit user approval.
+Use this skill to avoid issue sprawl and bloated ticket bodies when writing Linear content. It does not replace `linear:linear` for ordinary Linear reads, lookup, status checks, or project management.
+
+Default to one issue, draft first, and write to Linear only after explicit user approval.
 
 ## Workflow
 
