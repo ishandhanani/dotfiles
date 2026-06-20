@@ -27,7 +27,8 @@ This skill vendors the `gh-address-comments` GraphQL approach because flat PR co
    - Group duplicates, but keep every source thread/comment id in the row.
 4. Return the table before code changes.
 5. If the user selects rows, implement only those rows. If a row needs explanation rather than code, draft the reply instead of forcing a change.
-6. After selected work, return an updated mini-ledger with `fixed`, `reply drafted`, `deferred`, or `not actionable`.
+6. After selected work, add a short GitHub comment for each fixed row: `[AI] Fixed in <commit>. <one-sentence summary>`.
+7. Return an updated mini-ledger with `fixed`, `reply drafted`, `deferred`, or `not actionable`.
 
 ## Ledger Table
 
@@ -47,10 +48,11 @@ Rules:
 ## Write Safety
 
 - Do not edit code until the user selects rows or explicitly says to fix all actionable rows.
-- Do not post replies, resolve threads, or submit reviews unless the user explicitly asks for GitHub writes.
+- Do not post replies, resolve threads, or submit reviews unless the user explicitly asks for GitHub writes; the fixed-row comment above is allowed after the user asks to fix selected rows.
 - If comments conflict, stop and show the tradeoff.
 - If a comment is ambiguous, mark it `reply` or `defer` and draft the question.
 - Keep every code change traceable to a ledger row.
+- Post the `[AI] Fixed in <commit>. ...` comment only for rows actually addressed by a commit; keep the summary to one sentence.
 
 ## Fallback
 
