@@ -4,7 +4,7 @@
 
 let
   # List of uv tools you want installed
-  uvxTools = [ "llm" "y-cli" "ty" ];
+  uvxTools = [ "llm" "y-cli" "ty" "prek" ];
 in
 {
   home.activation.installUvTools = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''

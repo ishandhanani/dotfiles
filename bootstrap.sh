@@ -161,8 +161,8 @@ fi
 # ---------------------------------------------------------------------------
 # 9. uvx tools -- mirrors modules/uvx.nix
 # ---------------------------------------------------------------------------
-info "uvx tools (llm, y-cli, ty)"
-for tool in llm y-cli ty; do
+info "uvx tools (llm, y-cli, ty, prek)"
+for tool in llm y-cli ty prek; do
   if uv tool list 2>/dev/null | grep -q "^$tool "; then
     ok "$tool already installed"
   else
