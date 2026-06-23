@@ -17,6 +17,7 @@ Produce a status update in Ishan's voice for a date range, grounded in two sourc
 
 1. **Date range** (`FROM`..`TO`, inclusive). If the user gives a single anchor ("last month", "since GTC"), resolve to absolute dates. Default if unspecified: **last 1 month** ending today.
 2. **Optional**: specific repos to focus/exclude; PTO/travel/cross-team context to fold into a Misc section; whether to keep `(repo#num)` citations (default: keep for drafting, the user strips them for the final paste).
+3. **Optional running T5T doc**: if the user supplies one, read the prior tabs before drafting. An unambiguous empty final-tab title such as `May18 - June 23` can establish the date range without another question.
 
 Resolve identity once: `gh api user --jq .login` (expect `ishandhanani`). Memory lives at `$HOME/memory` (registry: `$HOME/memory/INDEX.md`; one folder per project, each with an `INDEX.md` whose frontmatter has `status` + `last-updated`).
 
@@ -60,12 +61,14 @@ gh search prs --reviewed-by ishandhanani --updated "$FROM..$TO" --limit 100 \
 This auto-discovers repos memory won't name (in past runs: brev-cli, Aphoh/codex, warnold-tachometer, fork PRs). Per-PR detail when a bullet needs it:
 
 ```bash
-gh pr view <repo>#<num> --json number,title,body,state,mergedAt,closedAt,author,reviews,comments \
+gh pr view <num> -R <owner/repo> --json number,title,body,state,mergedAt,closedAt,author,reviews,comments \
   --jq '{num:.number,title:.title,state:.state,merged:.mergedAt,author:.author.login,
          nComments:(.comments|length),nReviews:(.reviews|length),body:.body}'
 ```
 
 For a flagship "after N comments" line, also count review comments: `gh api repos/<owner>/<repo>/pulls/<num>/comments --jq 'length'` and add `nReviews`. Fork/private PRs may 404 — note and skip.
+
+Before clustering, collect the canonical public PRs/issues/RFCs named by each active memory project. Do not limit candidates to PRs returned by the authored sweep: the best framing artifact may be a collaborator-owned RFC or a public follow-up linked only from memory.
 
 ## Step 3 — Fan out subagents over the period's active workstreams
 
@@ -84,9 +87,13 @@ If memory surfaced a big workstream that gh under-covered (uncommitted POCs, des
 
 Take the subagents' bullets and produce the final update yourself (or via one reducer agent):
 
+- **This is a top-line update, not an activity inventory.** Target **6–9 bullets total**, usually across **2–3 themes** with **2–3 bullets per theme**. Generate more candidates, then cut aggressively. A smaller update with the period's real story is better than comprehensive coverage.
 - **Auto-cluster each run.** Infer this period's themes from the actual work; do not force last period's headers. A workstream that dominated one period (ModelExpress, L3 routing) may be absent the next. Order themes by significance/effort.
 - **Dedupe across themes.** The same PR can surface in two clusters (e.g. a router PR is both "Agents" and "Routing"). Keep it in the single best-fitting theme; don't repeat it.
 - **Summarize the long tail.** Many small sync/CI/review PRs → one bullet ("reviewed ~7 KV-router PRs covering …"; "stood up frontend-crates with hourly sync-check"). Lead with substantive work.
+- **Prefer the public narrative over implementation archaeology.** Promote shipped user-visible contracts, canonical RFCs, and clear architecture pivots. Fold supporting fixes into those bullets. Drop adjacent ecosystem work, routine infrastructure, and interesting POCs unless they materially change the period's story.
+- **Say the consequence plainly.** Prefer direct lines such as "No more invasive `agent_context`" or a compact `TLDR -` explanation over internal mechanism-heavy prose. Connect completed work to the next concrete capability when that progression is the point.
+- **Contextualize relative metrics.** If a claim such as "within 2%" matters, include the compact model/hardware/workload context needed to interpret it. Otherwise omit the metric rather than leave it vague.
 - **Append a `[add color]` line** for what the data can't infer: PTO/travel, cross-team rumors, forward-looking framing, named-but-not-in-PR collaborators. Fill from the user's Step-0 context if provided, else leave the marker.
 
 ## Citations — markdown PR hyperlinks
@@ -116,16 +123,26 @@ Use `/pull/<num>` for PRs and `/issues/<num>` for issues (GitHub redirects betwe
 
 **Always write the final update to a tmp markdown file** in addition to printing it in the chat, so the user has a file to copy from. Use `/tmp/t5t-<FROM>_<TO>.md` (e.g. `/tmp/t5t-2026-05-11_2026-06-11.md`). Write the exact same content shown in chat (with the markdown PR hyperlinks). Tell the user the path at the end.
 
+### Running-document mode
+
+When the user provides a running Google Doc and asks for it to be filled:
+
+1. Use the Google Docs skill and connector; read the full tab list and the preceding 2–3 updates before writing.
+2. Treat the live document as the strongest voice/template reference: preserve its plain date line, bold section labels, bullets, link style, and approximate density.
+3. Write only the requested empty/latest tab, then verify the tab id, content, bullet structure, bold labels, and links through connector readback.
+4. If the user later cleans up the draft, compare the edited tab with the generated file. Treat deletions as stronger feedback than wording tweaks, then update selection and voice rules accordingly.
+
 ## Voice guide (match Ishan's T5T style)
 
 - First person, conversational, status-update register: "Implemented…", "Worked with X to…", "Currently investigating…", "I am really hoping to merge this by this week…".
+- Prefer short, direct architecture explanations over polished release-note prose. Sentence fragments and blunt consequences are fine when they match the live document.
 - **Describe the work, not the metrics.** Each bullet is about WHAT you built/fixed/drove and WHY it matters. Numbers are optional garnish, not the subject — include at most one per bullet, and only when the number itself is the headline (e.g. a review that took 200+ comments). Never lead with a metric and never stack benchmark figures. Prefer "fixed a request-cancellation memory leak in the SGLang disagg workers" over "cut decode-pod VmHWM 40.1→52.0 GB over a 7h test".
 - Name collaborators when memory/PR shows them ("Working with Pei on…", "addressed hzh0425's review", "with alex + rainj").
 - State status plainly: "merged this week", "in final stages of review", "still very much POC", "closed in favor of X", "blocked on <upstream thing>".
-- No emojis. No filler. 3–5 bullets per theme.
+- No emojis. No filler. Usually 2–3 bullets per theme and 6–9 bullets total.
 
 ## Boundaries
 
-- **Read-only.** This skill reads memory and GitHub; it never opens/edits/comments on PRs and never pushes to memory. Output is text for the user to paste/edit.
+- **No source-system writes.** This skill never opens/edits/comments on PRs and never pushes to memory. It may write an explicitly supplied running T5T document when the user asks, using the Google Docs workflow above.
 - **Never invent.** Every factual claim traces to a memory entry or a PR. If memory and a PR conflict, prefer memory for the *why/numbers* and gh for *merge state*, and note the conflict. Soft context the data can't support goes in an explicit `[add color]` slot — never fabricated.
 - **Dates are the gate.** When unsure whether something belongs in the window, check memory's `last-updated` / commit dates and the PR's merge/close date. Out-of-window work is excluded even if notable.
