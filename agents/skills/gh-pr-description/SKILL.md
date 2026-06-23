@@ -19,7 +19,7 @@ Use this skill to keep PR descriptions concise and stable. Fetch the existing bo
 3. Compose the managed block.
    - Keep intro to exactly 2 sentences: what changed and why it matters.
    - Keep implementation to 3-6 bullets.
-   - Keep walkthrough inside a markdown `<details>` block.
+   - Keep walkthrough inside a markdown `<details>` block; choose the clearest format under [Walkthrough Format](#walkthrough-format).
    - Include validation, even if it is `Not run (reason)`.
    - If associated with a Linear ticket, include `CLOSES: <TICKET-ID>`; do not add the full Linear URL.
    - Add a benchmark section at the bottom only when benchmark results were actually collected.
@@ -48,8 +48,7 @@ CLOSES: DYN-123
 <details>
 <summary>Walkthrough</summary>
 
-- `path/to/file`: what changed and why it matters.
-- `path/to/other`: keep each row short.
+- Concise walkthrough content: file/function bullets, or one Mermaid diagram when it materially clarifies the change.
 
 </details>
 
@@ -62,6 +61,15 @@ CLOSES: DYN-123
 <!-- codex-pr-description:end -->
 ```
 
+## Walkthrough Format
+
+Choose the smallest format that makes the implementation easier to understand:
+
+- Use 1-12 file/function bullets for simple or independent edits.
+- Use one compact Mermaid flowchart when the change connects three or more components or alters ownership/data flow.
+- Use one compact Mermaid sequence diagram when request, event, or lifecycle ordering is the important part.
+- Do not add a diagram merely because the PR changes multiple files. Keep labels short and omit implementation detail already covered above.
+
 ## Anti-Slop Rules
 
 - Do not delete content outside the managed block.
@@ -71,7 +79,7 @@ CLOSES: DYN-123
 - Do not add `Benchmark Results` without real benchmark data.
 - Do not add speculative follow-up work.
 - Do not repeat the same issue link in multiple sections.
-- Do not use more than 6 implementation bullets or 12 walkthrough bullets.
+- Do not use more than 6 implementation bullets, 12 walkthrough bullets, or one walkthrough diagram.
 
 ## Existing Body Safety
 
