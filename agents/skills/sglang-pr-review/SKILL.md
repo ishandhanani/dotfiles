@@ -1,6 +1,6 @@
 ---
 name: sglang-pr-review
-description: Clone an SGLang PR into a throwaway checkout, build it in a fresh venv, run it with sglang.launch_server, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review an sglang PR (e.g. "test sgl-project/sglang#12345", "review this sglang PR").
+description: Check out an SGLang PR in a throwaway worktree, build it in a fresh venv, run it with sglang.launch_server, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review an sglang PR (e.g. "test sgl-project/sglang#12345", "review this sglang PR").
 user-invocable: true
 ---
 
@@ -38,12 +38,14 @@ Confirm: **PR number** (repo defaults to `sgl-project/sglang`), and anything the
 
 ## Step 1 — Throwaway checkout (never touch existing sglang trees)
 
-Live sglang checkouts on the box may be someone's active work — don't reuse or branch-switch them. Clone fresh:
+Live sglang checkouts on the box may be someone's active work — don't reuse or branch-switch them. Add a detached worktree from the canonical checkout:
 
 ```bash
-PR=<number>; WORK=/ephemeral/sglang-pr-$PR
-git clone --quiet https://github.com/sgl-project/sglang.git $WORK
-cd $WORK && gh pr checkout $PR && git log --oneline -1
+PR=<number>; ROOT=/ephemeral/sglang; WORK=/ephemeral/sglang-wt/pr-$PR
+mkdir -p "$(dirname "$WORK")"
+git -C "$ROOT" fetch origin "+pull/$PR/head:refs/remotes/origin/pr/$PR"
+git -C "$ROOT" worktree add --detach "$WORK" "origin/pr/$PR"
+git -C "$WORK" log --oneline -1
 ```
 
 PR branches are often based on an older `main` and show as CONFLICTING — that's fine, test the branch as the author has it.
@@ -144,4 +146,4 @@ Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `IN
 
 ## Cleanup
 
-`pkill -9 -f sglang`. The throwaway `/ephemeral/sglang-pr-$PR` + its venv can be removed when done (ask before deleting if disk isn't tight).
+`pkill -9 -f sglang`. Ask before deleting if disk isn't tight, then run `git -C /ephemeral/sglang worktree remove /ephemeral/sglang-wt/pr-$PR && git -C /ephemeral/sglang worktree prune`.
