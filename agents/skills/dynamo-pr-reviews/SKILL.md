@@ -71,6 +71,16 @@ Note whether the diff touches **Rust** (`lib/**/*.rs`, `*/Cargo.toml`) or is **P
 
 ## Step 2 — Build
 
+Use only the active checkout's `.venv`; never reuse the canonical checkout's venv from a worktree. Stop if `.venv` is a symlink:
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+if [ -L .venv ]; then echo ".venv must be local to $ROOT" >&2; exit 1; fi
+test -x .venv/bin/python || uv venv .venv --python 3.12
+source .venv/bin/activate
+```
+
 ### Environment prerequisites (do once, check first)
 
 **CUDA PATH**: Verify `nvcc` points to CUDA 12+, not the stale `/usr/bin/nvcc` (CUDA 11.5):
@@ -99,15 +109,16 @@ Do NOT debug version conflicts between sglang/transformers/huggingface_hub/kerne
 
 ### Build steps
 
-The venv at `/ephemeral/dynamo/.venv` already has the Rust `_core` binding and the SGLang backend installed. Rebuild only what changed:
+With the checkout-local venv active, rebuild only what changed and verify editable imports resolve inside the active checkout:
 
 ```bash
-source /ephemeral/dynamo/.venv/bin/activate
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
 # Rust touched? rebuild the binding (slow, incremental):
-cd /ephemeral/dynamo/lib/bindings/python && maturin develop --uv
+cd "$ROOT/lib/bindings/python" && maturin develop --uv
 # Always refresh the Python package (fast):
-cd /ephemeral/dynamo && uv pip install -e .
-python -c "import dynamo.sglang, sglang; print('ok', sglang.__version__)"
+cd "$ROOT" && uv pip install -e .
+python -c "import dynamo, dynamo.sglang, sglang; print('ok', dynamo.__file__, sglang.__version__)"
 ```
 
 Python-only PRs need only the `uv pip install -e .` (often the editable tree is already live — just relaunch the server). If `import sglang` fails, the backend isn't installed — install it before launching.

@@ -44,7 +44,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 
 - Linux with GPUs (`nvidia-smi`). You have sudo.
 - `/ephemeral/` is NVMe-backed fast storage -- prefer for build artifacts and large checkouts.
-- Venvs live in project roots. Check what exists before activating.
+- Before Python/build/test work, inspect `$VIRTUAL_ENV` and the active checkout's `<root>/.venv`. Use or create only `<root>/.venv`; never copy, symlink, reuse, or mutate another checkout's venv. Verify editable imports resolve inside the active checkout.
 
 ### Build Commands
 - **Dynamo** (Rust + Python): `cd <root>/lib/bindings/python && maturin develop --uv && cd <root> && uv pip install -e .`
@@ -57,7 +57,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Branch naming: `idhanani/dyn-{ticket-number}-{short-description}`
 - Manual worktrees live under `/ephemeral/<repo>-wt/<ticket-or-purpose>`; never create them directly under `/ephemeral/`.
 - Create and remove worktrees with `git worktree add` / `git worktree remove`, then `git worktree prune`; never delete registered worktrees with `rm`.
-- Keep worktree-specific venvs inside the worktree so removing it cleans up both.
+- After confirming a manual worktree's PR merged, remove it without `--force` only after checking for tracked/untracked changes, needed ignored artifacts, and unpushed work; then run `git worktree prune`. Its local venv is removed with it.
 - Codex-managed worktrees under `$CODEX_HOME/worktrees` are exempt from the manual layout convention.
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.
 - Worktrees for parallel branch development. On rebase conflicts: preserve local work first (`git stash` or backup branch), then resolve. Don't force-reset without asking.
