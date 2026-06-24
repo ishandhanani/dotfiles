@@ -1,4 +1,0 @@
-interface:
-  display_name: "Cursor Code Review"
-  short_description: "Strict maintainability review using the Cursor thermo-nuclear rubric"
-  default_prompt: "Run cursor-code-review on the current branch."

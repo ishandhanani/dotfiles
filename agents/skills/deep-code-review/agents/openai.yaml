@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deep Code Review"
+  short_description: "Adversarial performance and maintainability review"
+  default_prompt: "Use $deep-code-review to audit the current branch for correctness, performance, and maintainability risks."

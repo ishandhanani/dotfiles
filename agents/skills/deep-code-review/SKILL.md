@@ -1,14 +1,13 @@
 ---
-name: cursor-code-review
-description: Run the adapted Cursor thermo-nuclear code quality review rubric. Use when the user asks for cursor-code-review, a Cursor-style code review skill, a thermo-nuclear or thermonuclear review, a code-judo review, a deep code quality audit, or an especially harsh maintainability review. Do not use for ordinary bug-focused code review unless the user asks for this stricter maintainability rubric.
-license: MIT
+name: deep-code-review
+description: Run a deep, adversarial code review focused on correctness, hot-path performance, maintainability, abstraction quality, and codebase health. Use when the user asks for deep-code-review, a deep or overall code review, a thermo-nuclear or thermonuclear review, a code-judo review, a strict performance review, or an especially harsh maintainability audit. Do not use for ordinary bug-focused review unless the user asks for this stricter rubric.
 ---
 
-# Cursor Code Review
+# Deep Code Review
 
 Adapted from Cursor's `thermo-nuclear-code-quality-review` agent and skill in `cursor-team-kit` at commit `b8f2564c2e8da66b331c1dd63c2a2925d6739961`.
 
-Use this skill for an unusually strict review focused on implementation quality, maintainability, abstraction quality, and codebase health. The reviewer should be ambitious about structure: actively look for behavior-preserving changes that make the implementation smaller, more direct, and easier to reason about.
+Use this skill for an unusually strict review focused on correctness, performance, implementation quality, maintainability, abstraction quality, and codebase health. Review adversarially: challenge the premise, trace failure modes across boundaries, and actively look for behavior-preserving changes that make the implementation smaller, faster, more direct, and easier to reason about.
 
 ## Workflow
 
@@ -23,7 +22,29 @@ Use this skill for an unusually strict review focused on implementation quality,
 
 ## Core Prompt
 
-Perform a deep code quality audit of the current branch's changes. Rethink how to structure or implement the changes to meaningfully improve code quality without changing behavior. Improve abstractions, modularity, succinctness, and legibility. Reduce spaghetti code. Be ambitious when there is a clear path to a better structure.
+Perform a deep, adversarial code quality audit of the current branch's changes. Rethink how to structure or implement the changes to meaningfully improve correctness, performance, and code quality without changing intended behavior. Improve abstractions, modularity, succinctness, and legibility. Reduce spaghetti code. Be ambitious when there is a clear path to a better structure.
+
+## Adversarial Pass
+
+Challenge the change as a whole before reviewing individual lines:
+
+- Ask whether the implementation solves the actual problem in the owning layer or merely patches a symptom.
+- Find ways tests can pass while production behavior still fails, including defaults, error paths, partial rollout, rollback, recovery, and cross-component interactions.
+- Identify hidden assumptions about ordering, ownership, lifecycle, compatibility, input shape, scale, and failure isolation.
+- Trace changed contracts through callers and consumers rather than trusting the local diff.
+- Compare against a materially simpler or safer direction when one is concrete.
+- Report only adversarial concerns with a plausible causal path; do not manufacture hypothetical failures.
+
+## Performance Pass
+
+Trace each changed hot path end to end and compare the work before and after the change:
+
+- Check allocations, cloning, boxing, dynamic dispatch, collection materialization, formatting, serialization, and copies.
+- Check extra scans, branches, lookups, call depth, synchronization, lock scope, atomics, syscalls, IPC, and retries.
+- Check whether the change loses batching, locality, cache friendliness, short-circuiting, boundedness, or backpressure.
+- Check CPU, memory, latency, throughput, file-descriptor, task, queue, and connection growth at expected production scale.
+- Distinguish hot-path cost from irrelevant cold-path micro-optimization.
+- Use existing benchmarks or profiles when practical. Otherwise require a precise causal argument and the smallest measurement that would prove or disprove the risk.
 
 ## Non-Negotiable Standards
 
@@ -88,6 +109,9 @@ For every meaningful change, ask:
 - Did the diff introduce casts, optionality, or ad-hoc object shapes that obscure the invariant?
 - Is this logic in the canonical layer, or did details leak across a boundary?
 - Is this orchestration more sequential or less atomic than it needs to be?
+- Can the change pass its tests while failing under partial rollout, recovery, concurrency, or production-scale inputs?
+- What new work occurs per request, token, item, iteration, or connection on the hot path?
+- Did the change add allocations, copies, dynamic dispatch, synchronization, serialization, or resource growth without evidence that the cost is acceptable?
 
 ## Flag Aggressively
 
@@ -110,6 +134,9 @@ Escalate findings for:
 - Logic added in the wrong layer or package.
 - Sequential async flow where independent work could stay simpler with parallel execution.
 - Partial-update logic that leaves state less atomic than necessary.
+- Locally correct changes that break callers, consumers, rollout, recovery, or failure isolation.
+- New hot-path allocations, copies, materialization, dynamic dispatch, synchronization, IPC, or repeated scans without a demonstrated need.
+- Performance claims supported only by intuition when an existing benchmark or targeted measurement is available.
 
 ## Preferred Remedies
 
@@ -131,6 +158,9 @@ When identifying a code-quality problem, prefer suggestions like:
 - Move logic to the package, module, or layer that owns the concept.
 - Parallelize independent work when that also simplifies orchestration.
 - Restructure related updates into a more atomic flow when partial state is hard to reason about.
+- Keep hot-path data borrowed, statically dispatched, batched, and allocation-free where the existing design allows it.
+- Preserve bounded queues and backpressure instead of hiding overload behind buffering or retries.
+- Use the repository's existing benchmark or profiler to measure the smallest representative path.
 
 Do not be satisfied with rename-level feedback when the real issue is structural. Do not be satisfied with a cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
 
@@ -154,13 +184,13 @@ Useful comment shapes:
 
 Prioritize findings in this order:
 
-1. Structural code-quality regressions
-2. Missed opportunities for dramatic simplification or code-judo restructuring
-3. Spaghetti and branching complexity increases
-4. Boundary, abstraction, and type-contract problems that make code harder to reason about
-5. File-size and decomposition concerns
-6. Modularity and abstraction issues
-7. Legibility and maintainability concerns
+1. Adversarial correctness, contract, rollout, and recovery failures
+2. Hot-path performance and resource regressions
+3. Structural code-quality regressions
+4. Missed opportunities for dramatic simplification or code-judo restructuring
+5. Spaghetti and branching complexity increases
+6. Boundary, abstraction, and type-contract problems that make code harder to reason about
+7. File-size, modularity, decomposition, and maintainability concerns
 
 ## Approval Bar
 
@@ -174,6 +204,9 @@ Do not approve merely because behavior appears correct. Approval requires:
 - no unnecessary wrapper, cast, or optionality churn that obscures the real design
 - no clear architecture-boundary leak or avoidable canonical-helper duplication
 - no missed opportunity for an obvious decomposition that would materially improve maintainability
+- no material cross-boundary failure mode hidden by locally passing tests
+- no unjustified hot-path allocation, copying, synchronization, serialization, or resource growth
+- no performance-sensitive change left unmeasured when a targeted benchmark is practical
 
 Treat these as presumptive blockers unless the author can justify them clearly:
 
