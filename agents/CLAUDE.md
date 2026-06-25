@@ -34,6 +34,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 ## Communication Preferences
 
 - **Be concise.** Bullet points over paragraphs. Actionable items over narrative analysis. User will redirect if verbose.
+- **No hard-wrapped Markdown.** Write each paragraph and list item as one continuous line and rely on soft-wrap. Never add manual line breaks mid-paragraph to hit a column width. Newlines are only for separating paragraphs, list items, headings, code fences, and tables.
 - Explain code with flow charts/diagrams tracing through components and their interactions
 - When uncertain, ask rather than assume
 - No emojis in code, commits, or communication
