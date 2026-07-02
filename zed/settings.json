@@ -1,7 +1,28 @@
 // Zed user settings.
 // Docs: https://zed.dev/docs/configuring-zed
 {
-  "theme": "One Dark",
+  "ssh_connections": [
+    {
+      "host": "d",
+      "args": [],
+      "projects": [
+        {
+          "paths": [
+            "/ephemeral/sglang-programmatic-kv-rfc"
+          ]
+        }
+      ]
+    }
+  ],
+  "agent_servers": {
+    "claude-acp": {
+      "type": "registry"
+    },
+    "codex-acp": {
+      "type": "registry"
+    }
+  },
+  "theme": "Ayu Dark",
   "vim_mode": true,
   "project_panel": {
     "dock": "left"
