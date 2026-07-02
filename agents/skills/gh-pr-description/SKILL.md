@@ -5,7 +5,7 @@ description: Create or update GitHub pull request descriptions without deleting 
 
 # GH PR Description
 
-Use this skill to keep PR descriptions concise and stable. Fetch the existing body first, update only the managed description block, and preserve all other content verbatim.
+Use this skill to keep PR summaries concise and walkthroughs complete, accurate, and stable. Fetch the existing body first, update only the managed description block, and preserve all other content verbatim.
 
 ## Workflow
 
@@ -14,12 +14,13 @@ Use this skill to keep PR descriptions concise and stable. Fetch the existing bo
    - Otherwise use the current branch: `gh pr view --json number,url,title,body,baseRefName,headRefName`.
 2. Gather concise evidence.
    - Read the existing PR body.
-   - Inspect changed files and commits with the smallest useful commands, usually `gh pr diff --name-only`, `git diff --stat`, and recent commit subjects.
+   - Inspect the current diff and the relevant implementation, not only filenames and commit subjects.
+   - Compare the existing walkthrough against the current code claim by claim. Update or remove anything invalidated by every new change.
    - Pull linked issue IDs from branch name, PR title/body, commit messages, or user context.
 3. Compose the managed block.
    - Keep intro to exactly 2 sentences: what changed and why it matters.
    - Keep implementation to 3-6 bullets.
-   - Keep walkthrough inside a markdown `<details>` block; choose the clearest format under [Walkthrough Format](#walkthrough-format).
+   - Keep a complete reviewer-facing technical explanation inside the walkthrough `<details>` block; follow [Walkthrough Content](#walkthrough-content).
    - Include validation, even if it is `Not run (reason)`.
    - If associated with a Linear ticket, include `CLOSES: <TICKET-ID>`; do not add the full Linear URL.
    - Add a benchmark section at the bottom only when benchmark results were actually collected.
@@ -48,7 +49,21 @@ CLOSES: DYN-123
 <details>
 <summary>Walkthrough</summary>
 
-- Concise walkthrough content: file/function bullets, or one Mermaid diagram when it materially clarifies the change.
+#### Mental model
+
+Explain the behavior in plain language, then include a Mermaid flow or sequence diagram when state, data, or ownership crosses three or more components.
+
+#### State and ordering
+
+Explain state, scores, precedence, tie-breaking, and a small concrete example when applicable.
+
+#### Request lifecycle
+
+Trace the relevant success and failure paths and explain why new helpers or indirection exist.
+
+#### Boundaries and limitations
+
+State what remains unchanged, current approximations, and known sharp edges.
 
 </details>
 
@@ -61,14 +76,20 @@ CLOSES: DYN-123
 <!-- codex-pr-description:end -->
 ```
 
-## Walkthrough Format
+## Walkthrough Content
 
-Choose the smallest format that makes the implementation easier to understand:
+Treat the walkthrough as the durable explanation a reviewer needs to understand the implementation without reconstructing it from the diff. Include every applicable item:
 
-- Use 1-12 file/function bullets for simple or independent edits.
-- Use one compact Mermaid flowchart when the change connects three or more components or alters ownership/data flow.
-- Use one compact Mermaid sequence diagram when request, event, or lifecycle ordering is the important part.
-- Do not add a diagram merely because the PR changes multiple files. Keep labels short and omit implementation detail already covered above.
+- Start with the simplest mental model and the observable outcome.
+- Use one compact Mermaid flowchart for multi-component state/data/ownership flow, or a sequence diagram when lifecycle ordering is central.
+- Explain state ownership, scoring or ordering semantics, precedence, ties, and one small numeric/table example when useful.
+- Explain why each non-obvious helper, adapter, or indirection exists and which existing machinery it reuses.
+- Trace the request/event lifecycle, including when state is committed and how cancellation or failure behaves.
+- State what the change deliberately does not alter.
+- State current approximations, limitations, and sharp edges. Never leave superseded design claims in place.
+- Name relevant files/functions, but do not turn the walkthrough into a file inventory.
+
+Omit inapplicable headings, not applicable information. Refresh the walkthrough every time the PR changes enough to affect any explanation, diagram edge, ordering rule, validation statement, or limitation.
 
 ## Anti-Slop Rules
 
@@ -79,7 +100,7 @@ Choose the smallest format that makes the implementation easier to understand:
 - Do not add `Benchmark Results` without real benchmark data.
 - Do not add speculative follow-up work.
 - Do not repeat the same issue link in multiple sections.
-- Do not use more than 6 implementation bullets, 12 walkthrough bullets, or one walkthrough diagram.
+- Do not use more than 6 implementation bullets or one walkthrough diagram. Walkthrough detail is allowed when each paragraph explains current code behavior.
 
 ## Existing Body Safety
 
