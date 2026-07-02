@@ -40,6 +40,24 @@ Use PyArrow, DuckDB, or an available reader. Adapt to the actual schema. For eac
 
 Show boundary timestamps and values for every delta. If samples are sparse, call the boundary approximate. Never derive a rate from a final counter alone.
 
+## SGLang measurement nuances
+
+- `kv_used_tokens` is only active/locked GPU KV. `full_token_usage` also excludes evictable radix pages. To determine GPU L1 occupancy at a scrape, use `max_total_num_tokens - kv_available_tokens` and report the simultaneous `kv_evictable_tokens` and `kv_used_tokens` split.
+- Do not compare a maximum from one timestamp to free tokens from another. Keep capacity, available, evictable, and active values aligned by endpoint and scrape timestamp.
+- SGLang TP ranks can export identical service counters. Verify synchronization, then count one logical worker (normally `tp_rank=0`); do not sum replicas.
+
+| Signal | Meaning |
+|---|---|
+| `cached_tokens_total{cache_source="device"}` | GPU L1 radix reuse |
+| `cached_tokens_total{cache_source="host"}` | Host HiCache L2 request match |
+| `load_back_tokens_total` | L2 -> L1 request-time materialization; not proactive prefetch |
+| `backuped_tokens_total` | Completed L2 -> L3 write-back; not a future hit |
+| `prefetched_tokens_total` / storage cache source | Tokens actually loaded from L3 for a request |
+
+- SGLang's storage "prefetch" is normally triggered during request admission after GPU/host matching. A nonzero policy/config name is not evidence of pre-arrival warming.
+- Storage cache-source and prefetch series can first appear with a nonzero value. Report the observed first/last delta and, if the server did not reset, the final lifetime counter separately; do not silently call their difference the all-run total.
+- Store allocation and store eviction prove retention/churn only. Attribute an L3 miss or eviction to a session only with request/key tracing; a body-only audit or `DYN_REQUEST_TRACE=0` cannot establish the header/session relationship.
+
 ## Preserve topology and labels
 
 - Group per endpoint/worker before a cluster total. Check whether TP/DP ranks export replicas of the same logical counter.
@@ -99,4 +117,3 @@ Return a compact evidence table with exact time window, topology/label treatment
 3. what is unknown and the one missing measurement or controlled run needed next.
 
 Preserve the query/command behind every reported number. Correct earlier conclusions immediately when schema discovery disproves an assumption.
-
