@@ -1,7 +1,6 @@
 ---
 name: sglang-pr-review
 description: Check out an SGLang PR in a throwaway worktree, build it in a fresh venv, run it with sglang.launch_server, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review an sglang PR (e.g. "test sgl-project/sglang#12345", "review this sglang PR").
-user-invocable: true
 ---
 
 # SGLang PR Review
@@ -115,6 +114,8 @@ For each hypothesis from Step 1, pull evidence:
 - **Correctness** — spot-check output; verify the invariants the PR claims *and the ones it doesn't* (off-by-one, double counting, unconditional cost hidden behind an "only when enabled" claim).
 
 Keep the concrete numbers / log lines — they go into the review verbatim.
+
+Only after testing and analysis are complete, ask the user whether to invoke `full-code-review` on the PR. Do not invoke it automatically.
 
 ## Step 6 — Report, then post the review (on approval)
 

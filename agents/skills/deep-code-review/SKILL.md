@@ -16,9 +16,10 @@ Use this skill for an unusually strict review focused on correctness, performanc
    - Otherwise inspect the current branch against the likely base, usually `main`, using `git diff --stat`, `git diff`, and changed-file contents.
    - Check file sizes for changed files so crossings around 1000 lines are visible.
 2. Apply the rubric below only to what the diff and surrounding contents support. Trace cross-file impact when module boundaries are touched.
-3. Do not spawn nested agents unless the user explicitly asks for subagents or parallel agent work.
-4. Report findings first, ordered by severity. Use `file_path:line_number` references where possible.
-5. Skip cosmetic nits when structural issues exist. Prefer a small number of high-conviction findings over a long list of minor comments.
+3. Use subagents when distinct review surfaces benefit from parallel inspection; keep each pass scoped and independently verify its findings.
+4. Load and use `phone-a-friend` for at least one independent, read-only verification pass. Give it the raw artifact and constraints without your conclusions, then verify material claims locally before including them. If it is unavailable, report that and continue.
+5. Report findings first, ordered by severity. Use `file_path:line_number` references where possible.
+6. Skip cosmetic nits when structural issues exist. Prefer a small number of high-conviction findings over a long list of minor comments.
 
 ## Core Prompt
 

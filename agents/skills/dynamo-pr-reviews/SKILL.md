@@ -1,7 +1,6 @@
 ---
 name: dynamo-pr-reviews
 description: Clone/checkout an ai-dynamo/dynamo PR, build it (maturin + editable Python), bring up etcd/NATS, run the end-to-end aggregated server via the repo's examples/backends/sglang/launch/agg.sh, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review a Dynamo PR (e.g. "test ai-dynamo/dynamo#10254", "review this dynamo PR").
-user-invocable: true
 ---
 
 # Dynamo PR Review
@@ -219,6 +218,8 @@ For each hypothesis from Step 1:
 - **Perf** — aiperf summary; A/B vs `main` (separate worktree + venv) if the PR claims a perf delta. Control ordering, fresh server per phase.
 
 Keep the concrete responses / log lines / numbers — they go in the review verbatim.
+
+Only after testing and analysis are complete, ask the user whether to invoke `full-code-review` on the PR. Do not invoke it automatically.
 
 ## Step 7 — Report, then post the review (on approval)
 
