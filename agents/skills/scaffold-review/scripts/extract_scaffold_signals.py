@@ -32,6 +32,7 @@ INJECTED_PREFIXES = (
     "<command-message>",
     "<local-command-stdout>",
     "<turn_aborted>",
+    "<codex_internal_context",
 )
 TEXT_BLOCK_TYPES = {"text", "input_text", "output_text"}
 SUBAGENT_TOOL_NAMES = {"spawn_agent", "wait_agent", "send_input", "close_agent", "resume_agent"}

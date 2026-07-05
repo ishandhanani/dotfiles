@@ -64,12 +64,13 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Worktrees for parallel branch development. On rebase conflicts: preserve local work first (`git stash` or backup branch), then resolve. Don't force-reset without asking.
 - For Dynamo and SGLang worktrees, do not push branches or forks unless I explicitly say to push.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
+- When posting PR review findings, submit a formal GitHub `COMMENT` review with each finding attached to the relevant diff line. Use `REQUEST_CHANGES` only when explicitly requested; never use a generic PR conversation comment.
 - When creating or updating a PR body, use the `gh-pr-description` skill so existing descriptions are preserved and kept concise.
 - For GitHub PR comments/review feedback, use `gh-comment-ledger` first; use `github:gh-address-comments` only after the ledger exists or when explicitly requested.
 
 ### Testing
 - **Smoke first**: single worker, minimal dataset, validate correctness
-- **Load test**: 16-32 concurrent requests via aiperf
+- **Load test**: 16-32 concurrent requests via aiperf for live servers; for mocker/replay simulation work, use mocker's load generator/simulator.
 - **Benchmark methodology**: control for ordering bias (A/B and B/A), fresh server per phase
 
 ### Server Lifecycle
