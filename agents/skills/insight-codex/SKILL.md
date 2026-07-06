@@ -50,5 +50,6 @@ python3 "${CODEX_HOME:?}/skills/insight-codex/scripts/generate_report.py" --code
 
 - Use only local files under the resolved Codex home; do not browse.
 - The extractor is deterministic. The final report should not rely only on those heuristics; Codex should analyze the extracted evidence and write the section content in `synthesis.json`.
+- Session duration is active event time with idle gaps capped at five minutes. Background-process exits are attributed to their launching command, and empty `rg`/`grep` no-match exits are not failures.
 - Keep the HTML structure fixed and the evidence grounded, but treat the interpretation-heavy sections as an actual synthesis task rather than a pure template fill.
 - Correction-style user turns are heuristic. Treat them as a friction indicator, not ground truth.

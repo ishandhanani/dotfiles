@@ -19,7 +19,23 @@ from typing import Any
 
 INSTRUCTION_PREFIXES = (
     "# AGENTS.md instructions",
+    "# CLAUDE.md instructions",
+    "<skill>",
     "<environment_context>",
+    "<codex_internal_context",
+    "<developer_context>",
+    "<permissions instructions>",
+    "<app-context>",
+    "<collaboration_mode>",
+    "<apps_instructions>",
+    "<skills_instructions>",
+    "<plugins_instructions>",
+    "<subagent_notification>",
+    "<local-command-caveat>",
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "<turn_aborted>",
 )
 
 CORRECTION_PATTERNS = (
@@ -36,6 +52,8 @@ CORRECTION_PATTERNS = (
 )
 
 EXIT_CODE_RE = re.compile(r"Process exited with code (\d+)")
+RUNNING_SESSION_RE = re.compile(r"Process running with session ID (\d+)")
+ACTIVE_GAP_CAP_SECONDS = 300
 PATH_SUFFIX_RE = re.compile(
     r"(?P<path>(?:~|/)[^\s\"']+\.(?:rs|py|ts|tsx|js|jsx|md|sh|toml|yaml|yml|json|html|css|sql))"
 )
@@ -194,12 +212,20 @@ class SessionState:
     uses_update_plan: bool = False
     touched_extensions: Counter[str] = field(default_factory=Counter)
     call_prefixes: dict[str, str] = field(default_factory=dict)
+    call_sessions: dict[str, str] = field(default_factory=dict)
+    running_session_prefixes: dict[str, str] = field(default_factory=dict)
     workdir_roots: Counter[str] = field(default_factory=Counter)
+    last_ts: datetime | None = None
+    active_seconds: float = 0
 
     def absorb_timestamp(self, raw_ts: str | None) -> None:
         if not raw_ts:
             return
         current = parse_timestamp(raw_ts)
+        if self.last_ts is not None and current > self.last_ts:
+            self.active_seconds += min((current - self.last_ts).total_seconds(), ACTIVE_GAP_CAP_SECONDS)
+        if self.last_ts is None or current > self.last_ts:
+            self.last_ts = current
         if self.start_ts is None or current < self.start_ts:
             self.start_ts = current
         if self.end_ts is None or current > self.end_ts:
@@ -223,7 +249,7 @@ class SessionState:
                 if cwd_repo in GENERIC_REPOS or self.workdir_roots[candidate] >= self.workdir_roots[cwd_repo]:
                     repo = candidate
                     break
-        duration_minutes = max(1, int(round((self.end_ts - self.start_ts).total_seconds() / 60.0)))
+        duration_minutes = max(1, int(round(self.active_seconds / 60.0)))
         first_prompt = clean_text(real_messages[0]) if real_messages else "(no prompt found)"
         top_commands = ", ".join(
             f"{name} x{count}" for name, count in self.command_prefixes.most_common(3)
@@ -425,6 +451,13 @@ def find_touched_extensions(text: str) -> Counter[str]:
     return counts
 
 
+def is_expected_nonzero(prefix: str, exit_code: int, output: str) -> bool:
+    if exit_code != 1 or prefix not in {"rg", "grep"}:
+        return False
+    _, marker, body = output.partition("Output:\n")
+    return bool(marker) and not body.strip()
+
+
 def analyze_session(path: Path) -> SessionSummary | None:
     state = SessionState(path=path)
     with path.open("r", encoding="utf-8", errors="ignore") as handle:
@@ -493,11 +526,15 @@ def analyze_session(path: Path) -> SessionSummary | None:
                     state.uses_github_app = True
                 if name == "update_plan":
                     state.uses_update_plan = True
-                if name == "exec_command":
+                raw_args = payload.get("arguments", "{}")
+                if isinstance(raw_args, dict):
+                    args = raw_args
+                else:
                     try:
-                        args = json.loads(payload.get("arguments", "{}"))
-                    except json.JSONDecodeError:
+                        args = json.loads(raw_args)
+                    except (json.JSONDecodeError, TypeError):
                         args = {}
+                if name == "exec_command":
                     cmd = args.get("cmd", "")
                     workdir = args.get("workdir")
                     if workdir:
@@ -513,6 +550,13 @@ def analyze_session(path: Path) -> SessionSummary | None:
                         state.git_pushes += 1
                     if GH_CMD_RE.search(cmd):
                         state.github_cli_commands += 1
+                elif name == "write_stdin":
+                    session_id = str(args.get("session_id", ""))
+                    if call_id and session_id:
+                        state.call_sessions[call_id] = session_id
+                        state.call_prefixes[call_id] = state.running_session_prefixes.get(
+                            session_id, name
+                        )
                 else:
                     if call_id:
                         state.call_prefixes[call_id] = name
@@ -522,11 +566,19 @@ def analyze_session(path: Path) -> SessionSummary | None:
                 if not isinstance(output, str):
                     output = json.dumps(output, sort_keys=True, default=str)
                 state.touched_extensions.update(find_touched_extensions(output))
+                call_id = payload.get("call_id", "")
+                prefix = state.call_prefixes.get(call_id, "(unknown)")
+                running = RUNNING_SESSION_RE.search(output)
+                if running:
+                    state.running_session_prefixes[running.group(1)] = prefix
                 match = EXIT_CODE_RE.search(output)
-                if match and int(match.group(1)) != 0:
+                if match and int(match.group(1)) != 0 and not is_expected_nonzero(
+                    prefix, int(match.group(1)), output
+                ):
                     state.tool_errors += 1
-                    prefix = state.call_prefixes.get(payload.get("call_id", ""), "(unknown)")
                     state.failed_command_prefixes[prefix] += 1
+                if match and call_id in state.call_sessions:
+                    state.running_session_prefixes.pop(state.call_sessions[call_id], None)
                 continue
     return state.build_summary()
 
