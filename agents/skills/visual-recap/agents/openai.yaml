@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Recap"
+  short_description: "Build evidence-backed HTML PR walkthroughs"
+  default_prompt: "Use $visual-recap to create a self-contained HTML walkthrough of this PR."
