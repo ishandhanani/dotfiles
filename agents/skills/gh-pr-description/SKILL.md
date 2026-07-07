@@ -23,7 +23,8 @@ Use this skill to keep PR summaries concise and walkthroughs complete, accurate,
    - Keep a complete reviewer-facing technical explanation inside the walkthrough `<details>` block; follow [Walkthrough Content](#walkthrough-content).
    - Include validation, even if it is `Not run (reason)`.
    - If associated with a Linear ticket, include `CLOSES: <TICKET-ID>`; do not add the full Linear URL.
-   - Add a benchmark section at the bottom only when benchmark results were actually collected.
+   - Add a benchmark section at the bottom only when benchmark results were actually collected. Present headline results as a compact Markdown table with units and baseline deltas where applicable.
+   - If one simple graph of a metric comparison or trend would be useful, create exactly one, upload it to a gist, and embed its raw image URL below the table. Prefer SVG for crisp text and gist compatibility; skip the graph when the table is sufficient.
 4. Update the body.
    - If the body already has the managed markers, replace only that block.
    - If no managed block exists, put the managed block at the top and leave the old body below it.
@@ -72,7 +73,8 @@ State what remains unchanged, current approximations, and known sharp edges.
 
 ### Benchmark Results
 - Only include this section if benchmarks were run.
-- Keep to the headline numbers and link artifacts/logs instead of pasting raw output.
+- Present headline numbers as a compact Markdown table with units and baseline deltas where applicable; link artifacts/logs instead of pasting raw output.
+- When one graph adds useful signal, create it from the summarized benchmark data, upload the image with `gh gist create`, resolve its raw URL with `gh api gists/<gist-id>`, and embed it below the table.
 <!-- codex-pr-description:end -->
 ```
 
@@ -98,6 +100,8 @@ Omit inapplicable headings, not applicable information. Refresh the walkthrough 
 - Do not list every changed file; group boring mechanical changes.
 - Do not claim validation that was not run.
 - Do not add `Benchmark Results` without real benchmark data.
+- Do not add more than one benchmark graph or graph data already clear from the table.
+- Do not upload raw logs, secrets, or unpublished data to a gist; graph only the aggregate values already included in the PR description.
 - Do not add speculative follow-up work.
 - Do not repeat the same issue link in multiple sections.
 - Do not use more than 6 implementation bullets or one walkthrough diagram. Walkthrough detail is allowed when each paragraph explains current code behavior.
