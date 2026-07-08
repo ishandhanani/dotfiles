@@ -21,7 +21,7 @@ Use this skill to keep PR summaries concise and walkthroughs complete, accurate,
    - Keep intro to exactly 2 sentences: what changed and why it matters.
    - Keep implementation to 3-6 bullets.
    - Keep a complete reviewer-facing technical explanation inside the walkthrough `<details>` block; follow [Walkthrough Content](#walkthrough-content).
-   - Include a `Before and After` section when the change has an observable behavior, output, performance, failure-mode, or compatibility claim. Compare the same scenario on the base and head revisions; for behavior-preserving changes, use the comparison to show the relevant regression check still passes.
+   - Treat `Before and After` as opt-in. Before adding it to a PR that does not already contain it, ask the user and wait for explicit approval. Use it primarily for concise, comparable error, diagnostic, or output snippets; do not turn general behavior changes into a table. Update an existing approved section without asking again.
    - Include validation, even if it is `Not run (reason)`.
    - If associated with a Linear ticket, include `CLOSES: <TICKET-ID>`; do not add the full Linear URL.
    - Add a benchmark section at the bottom only when benchmark results were actually collected. Present headline results as a compact Markdown table with units and baseline deltas where applicable.
@@ -32,7 +32,7 @@ Use this skill to keep PR summaries concise and walkthroughs complete, accurate,
    - Write with `gh pr edit --body-file <file>` after composing from the fetched existing body.
 5. Report what changed and the PR URL.
 
-No separate approval is required when the user asks to update the PR description. If the user asks for a draft only, do not write.
+Except for first adding `Before and After`, no separate approval is required when the user asks to update the PR description. If the user asks for a draft only, do not write.
 
 ## Managed Block
 
@@ -47,13 +47,6 @@ CLOSES: DYN-123
 ### How This Was Implemented
 - Short implementation bullet.
 - Another bullet only if it adds signal.
-
-### Before and After
-| Scenario | Before | After |
-|---|---|---|
-| Same input, workload, or regression check | Base result | Head result |
-
-Omit this section when no honest comparison is relevant or available. Never infer "nothing broke" from head-only validation.
 
 <details>
 <summary>Walkthrough</summary>
@@ -107,7 +100,7 @@ Omit inapplicable headings, not applicable information. Refresh the walkthrough 
 - Do not paste long logs, benchmark dumps, or generated artifacts into the body; link or summarize them.
 - Do not list every changed file; group boring mechanical changes.
 - Do not claim validation that was not run.
-- Do not present before/after results unless both sides use a comparable scenario; label meaningful environment or methodology differences.
+- Do not add a `Before and After` section without explicit user approval. If approved, compare the same scenario on both sides, prefer concrete error/output snippets, and label meaningful environment or methodology differences.
 - Do not add `Benchmark Results` without real benchmark data.
 - Do not add more than one benchmark graph or graph data already clear from the table.
 - Do not upload raw logs, secrets, or unpublished data to a gist; graph only the aggregate values already included in the PR description.
