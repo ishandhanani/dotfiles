@@ -7,6 +7,7 @@ CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
 CLAUDE_SETTINGS_SRC="$SOURCE_DIR/claude-settings.json"
 CLAUDE_STATUSLINE_SRC="$SOURCE_DIR/statusline-command.sh"
 SKILLS_SRC="$SOURCE_DIR/skills"
+LOCAL_SKILLS_SRC="$HOME/.skills_local"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 if [[ $# -gt 0 ]]; then
@@ -79,7 +80,7 @@ install_agent() {
     create_link "$CLAUDE_SRC" "$target_dir/$primary_instruction" "$backup_dir"
     mkdir -p "$target_dir/skills"
 
-    for skill_dir in "$SKILLS_SRC"/*; do
+    for skill_dir in "$SKILLS_SRC"/* "$LOCAL_SKILLS_SRC"/*; do
         if [[ -d "$skill_dir" ]]; then
             local skill_name
             skill_name="$(basename "$skill_dir")"
@@ -90,7 +91,7 @@ install_agent() {
     echo ""
     echo "Installed in $target_dir:"
     echo "  $primary_instruction"
-    for skill_dir in "$SKILLS_SRC"/*; do
+    for skill_dir in "$SKILLS_SRC"/* "$LOCAL_SKILLS_SRC"/*; do
         if [[ -d "$skill_dir" ]]; then
             echo "  skills/$(basename "$skill_dir")"
         fi
