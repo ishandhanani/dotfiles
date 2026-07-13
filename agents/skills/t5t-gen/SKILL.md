@@ -1,7 +1,6 @@
 ---
 name: t5t-gen
-description: Generate a bi-weekly/monthly engineering status update ("T5T") for a date range by mining the ~/memory work-vault (the narrative + numbers + why) and cross-referencing GitHub PR activity via gh (state, merge dates, comment counts) across all repos. Fans out subagents over the period's active workstreams, then auto-clusters the findings into themes. Use when asked to "write my T5T", "status update", "what did I do from X to Y", "biweekly update".
-user-invocable: true
+description: Generate a bi-weekly/monthly engineering status update ("T5T") for a date range by mining the ~/memory work-vault and cross-referencing GitHub PR activity via gh. First emit a full evidence-backed mega dump of active work, then a separately labeled recommended T5T for approval. Use when asked to "write my T5T", "status update", "what did I do from X to Y", "biweekly update", "T5T mega dump", or "T5T for approval".
 ---
 
 # T5T Generator
@@ -83,18 +82,25 @@ Give each subagent (a) its project list, (b) the gh PR list from Step 2 relevant
 
 If memory surfaced a big workstream that gh under-covered (uncommitted POCs, design pivots, benchmark-only work), tell that cluster's agent explicitly to prioritize it — these are the highest-value, easiest-to-miss items.
 
-## Step 4 — Synthesize: auto-cluster, dedupe, voice
+## Step 4 — Produce the mega dump before selecting
 
-Take the subagents' bullets and produce the final update yourself (or via one reducer agent):
+Take the subagents' bullets and GitHub sweep, then write a **Mega dump** before selecting the final update:
 
-- **This is a top-line update, not an activity inventory.** Target **6–9 bullets total**, usually across **2–3 themes** with **2–3 bullets per theme**. Generate more candidates, then cut aggressively. A smaller update with the period's real story is better than comprehensive coverage.
-- **Auto-cluster each run.** Infer this period's themes from the actual work; do not force last period's headers. A workstream that dominated one period (ModelExpress, L3 routing) may be absent the next. Order themes by significance/effort.
-- **Dedupe across themes.** The same PR can surface in two clusters (e.g. a router PR is both "Agents" and "Routing"). Keep it in the single best-fitting theme; don't repeat it.
-- **Summarize the long tail.** Many small sync/CI/review PRs → one bullet ("reviewed ~7 KV-router PRs covering …"; "stood up frontend-crates with hourly sync-check"). Lead with substantive work.
-- **Prefer the public narrative over implementation archaeology.** Promote shipped user-visible contracts, canonical RFCs, and clear architecture pivots. Fold supporting fixes into those bullets. Drop adjacent ecosystem work, routine infrastructure, and interesting POCs unless they materially change the period's story.
-- **Say the consequence plainly.** Prefer direct lines such as "No more invasive `agent_context`" or a compact `TLDR -` explanation over internal mechanism-heavy prose. Connect completed work to the next concrete capability when that progression is the point.
-- **Contextualize relative metrics.** If a claim such as "within 2%" matters, include the compact model/hardware/workload context needed to interpret it. Otherwise omit the metric rather than leave it vague.
-- **Append a `[add color]` line** for what the data can't infer: PTO/travel, cross-team rumors, forward-looking framing, named-but-not-in-PR collaborators. Fill from the user's Step-0 context if provided, else leave the marker.
+- Include every substantive in-window memory workstream and every substantive authored or reviewed GitHub PR discovered in Step 2. Group related items under inferred themes, but do not drop a whole theme because it will not fit the recommended update.
+- Give each item a short first-person bullet, status tag, PR/issue links, and `mem: <project>` provenance. Combine only genuine duplicates; a merged upstream result and its related draft/POC may be one item when they are the same outcome.
+- Keep routine one-line maintenance in a compact long-tail bullet, but do not hide shipped SGLang, Dynamo, review, benchmark, or infrastructure work merely because another theme is more narrative-friendly.
+- Include a final `GitHub sweep not otherwise expanded` section for in-window PRs that were intentionally summarized, with a one-line reason for summarizing them.
+- Save it to `/tmp/t5t-mega-<FROM>_<TO>.md`. The mega dump is the audit surface; do not optimize it for brevity.
+
+## Step 5 — Recommend a T5T from the mega dump
+
+Only after the mega dump is complete, make a separately labeled recommendation:
+
+- Select the top-line story from the mega dump. Target **6–9 bullets total** across **2–3 themes**, unless the user explicitly requests a different count such as Top 5.
+- Auto-cluster each run and dedupe only across genuinely overlapping outcomes. Prefer shipped user-visible contracts, canonical RFCs, meaningful empirical results, and clear architecture pivots.
+- State the consequence plainly and keep metrics contextual. Append `[add color]` only for information the sources cannot support.
+- Put a short `Why these made the cut` line after each recommended theme, and list the strongest omitted alternatives so the user can approve swaps without re-running discovery.
+- Never present the recommendation as the complete period record. It is a proposal derived from the mega dump.
 
 ## Citations — markdown PR hyperlinks
 
@@ -108,20 +114,29 @@ Use `/pull/<num>` for PRs and `/issues/<num>` for issues (GitHub redirects betwe
 ## Output format
 
 ```
-## <Month D> – <Month D>   [(PTO / travel notes if any)]
+## Mega dump: <Month D> – <Month D>
+
+**<Theme 1>**
+- [shipped] <first-person bullet about the work + why>. ([dynamo#NNNN](https://github.com/ai-dynamo/dynamo/pull/NNNN)) `mem: <project>`
+- ...
+
+**GitHub sweep not otherwise expanded**
+- <PR or compact grouped list> — <why summarized>
+
+## Recommended T5T: <Month D> – <Month D>
 
 **<Theme 1>**
 - <first-person bullet about the work + why>. ([dynamo#NNNN](https://github.com/ai-dynamo/dynamo/pull/NNNN))
-- ...
 
-**<Theme 2>**
-- ...
+Why these made the cut: <one short line>
+
+Strongest alternatives: <one short linked line>
 
 [**Misc**]
 - <PTO / travel / forward-looking — from user context or [add color]>
 ```
 
-**Always write the final update to a tmp markdown file** in addition to printing it in the chat, so the user has a file to copy from. Use `/tmp/t5t-<FROM>_<TO>.md` (e.g. `/tmp/t5t-2026-05-11_2026-06-11.md`). Write the exact same content shown in chat (with the markdown PR hyperlinks). Tell the user the path at the end.
+Always write both artifacts: `/tmp/t5t-mega-<FROM>_<TO>.md` and `/tmp/t5t-<FROM>_<TO>.md`. Print the mega dump first, then the recommended T5T. The recommended file contains only the recommended T5T and its cut/alternative notes.
 
 ### Running-document mode
 
@@ -129,8 +144,9 @@ When the user provides a running Google Doc and asks for it to be filled:
 
 1. Use the Google Docs skill and connector; read the full tab list and the preceding 2–3 updates before writing.
 2. Treat the live document as the strongest voice/template reference: preserve its plain date line, bold section labels, bullets, link style, and approximate density.
-3. Write only the requested empty/latest tab, then verify the tab id, content, bullet structure, bold labels, and links through connector readback.
-4. If the user later cleans up the draft, compare the edited tab with the generated file. Treat deletions as stronger feedback than wording tweaks, then update selection and voice rules accordingly.
+3. If the user asks for a mega dump, review, or approval, keep the document read-only. Produce both local artifacts first and wait for explicit approval before creating or replacing a tab.
+4. Otherwise, write only the requested empty/latest tab from the recommended T5T, then verify the tab id, content, bullet structure, bold labels, and links through connector readback.
+5. If the user later cleans up the draft, compare the edited tab with the generated file. Treat deletions as stronger feedback than wording tweaks, then update selection and voice rules accordingly.
 
 ## Voice guide (match Ishan's T5T style)
 
