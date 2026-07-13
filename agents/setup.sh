@@ -7,7 +7,7 @@ CLAUDE_SRC="$SOURCE_DIR/CLAUDE.md"
 CLAUDE_SETTINGS_SRC="$SOURCE_DIR/claude-settings.json"
 CLAUDE_STATUSLINE_SRC="$SOURCE_DIR/statusline-command.sh"
 SKILLS_SRC="$SOURCE_DIR/skills"
-LOCAL_SKILLS_SRC="$HOME/.skills_local"
+LOCAL_SKILLS_SRC="$HOME/.local_skills"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 if [[ $# -gt 0 ]]; then
