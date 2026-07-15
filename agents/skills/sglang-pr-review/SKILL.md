@@ -9,6 +9,14 @@ Empirical, end-to-end workflow for testing an SGLang PR and leaving a scoped, ev
 
 **Principle: read the diff to form hypotheses, then prove or refute them by running the code.** Never review from the diff alone — launch the server, exercise the changed path, show the logs/metrics/numbers.
 
+## Review threshold — protect simplicity
+
+Treat the PR's stated contract as its scope. Do not convert every imaginable edge case into a finding. A finding needs a concrete failure case: state the precondition and request/configuration, the changed path, and the user-visible or operational outcome (wrong output, crash, data loss, security boundary violation, or measurable regression). Prefer a reproduction; otherwise show the direct path and why the precondition is in scope.
+
+For example: “With cache eviction enabled and one full page, this counter decrements twice, so the next allocation sees negative free pages” is a finding. “An undocumented caller might someday pass a partial cache object” is not one without an in-scope caller or contract. Do not add defensive branches for that speculation.
+
+Every edge case adds complexity. Recommend the smallest fix only when the demonstrated impact earns it. Skip style preferences, hypothetical compatibility, unsupported inputs, and alternative designs. Never dismiss trust-boundary validation, data safety, or security findings.
+
 Main path is pure SGLang: `python -m sglang.launch_server`. Almost everything (kernels, schedulers, cache, sampling, metrics, the OpenAI API) can be exercised this way — no external serving layer needed.
 
 ## Boundaries — read-only on the PR
@@ -111,9 +119,9 @@ For each hypothesis from Step 1, pull evidence:
 - **Logs** — grep for the lines the PR adds/changes, and for any new WARN/ERROR (a feature that floods warnings under its own happy path is a finding).
 - **Metrics** — `curl -s localhost:30000/metrics | grep <new-series>`; check values are sane and self-consistent (e.g. a separate counter vs a histogram's `_sum`/`_count`).
 - **Perf** — compare aiperf summaries (branch vs base).
-- **Correctness** — spot-check output; verify the invariants the PR claims *and the ones it doesn't* (off-by-one, double counting, unconditional cost hidden behind an "only when enabled" claim).
+- **Correctness** — spot-check the PR's claimed invariants and closely coupled behavior (e.g. off-by-one, double counting, or unconditional cost contradicting an "only when enabled" claim). Do not expand into unrelated or unsupported edge cases.
 
-Keep the concrete numbers / log lines — they go into the review verbatim.
+Keep the concrete numbers / log lines — they go into the review verbatim. For every finding, also capture its failure case: trigger, affected path, and observed outcome.
 
 Only after testing and analysis are complete, ask the user whether to invoke `full-code-review` on the PR. Do not invoke it automatically.
 
@@ -130,7 +138,7 @@ Once approved, leave a **scoped, evidence-backed review** — one `COMMENT`-type
 #   "comments": [ {"path": "...", "line": <N>, "side": "RIGHT", "body": "<finding + proof snippet>"}, ... ] }
 gh api --method POST repos/sgl-project/sglang/pulls/$PR/reviews --input /tmp/review-$PR.json
 ```
-- Each `line` must be a line present in the diff (RIGHT side). One inline comment per finding, anchored at the line, with the captured log/metric snippet that proves it.
+- Each `line` must be a line present in the diff (RIGHT side). One inline comment per finding, anchored at the line, with the captured log/metric snippet and `Failure case: <trigger> → <outcome>` that proves it.
 - Default to `event: "COMMENT"` — only Approve / Request-changes if the user asks for a verdict.
 - Evidence in comments stays plain SGLang output. Be concrete and kind.
 

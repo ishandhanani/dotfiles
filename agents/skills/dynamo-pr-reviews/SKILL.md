@@ -9,6 +9,14 @@ Empirical, end-to-end workflow for testing an `ai-dynamo/dynamo` PR and leaving 
 
 **Principle: read the diff to form hypotheses, then prove or refute them by running the code.** The end-to-end check is the repo's own `examples/backends/sglang/launch/agg.sh` (aggregated serving: one frontend + one SGLang worker on a single GPU), driven with real traffic.
 
+## Review threshold — protect simplicity
+
+Treat a PR's stated contract as its scope. Do not turn every conceivable malformed input, alternate deployment, or defensive branch into a finding. A review finding needs a concrete failure case: name the precondition and request/configuration, the changed code path, and the user-visible or operational outcome (wrong result, crash, data loss, security boundary violation, or measurable regression). Prefer a reproduced failure; when that is impossible, show the direct code path and why the precondition is supported.
+
+For example: “With `stream=true` and an empty final chunk, this branch indexes `choices[0]`, so the request returns 500” is a finding. “A future client might send a shape outside the documented schema” is not one without an in-scope caller or contract. Do not recommend defensive code merely to cover the latter.
+
+Each extra edge case carries a complexity cost. Propose the smallest fix only when its demonstrated impact justifies that cost. Skip style preferences, hypothetical compatibility, unsupported inputs, and alternative designs unless they cause a concrete failure within the PR's scope. Never relax trust-boundary validation, data safety, or security findings.
+
 Sibling skill: `sglang-pr-review` (pure SGLang). This one is for the Dynamo serving layer; it brings up the full frontend + worker stack.
 
 ## Boundaries — read-only on the PR
@@ -217,7 +225,7 @@ For each hypothesis from Step 1:
 - **Metrics** — `/metrics` on the frontend `:8000` and worker `:8081`.
 - **Perf** — aiperf summary; A/B vs `main` (separate worktree + venv) if the PR claims a perf delta. Control ordering, fresh server per phase.
 
-Keep the concrete responses / log lines / numbers — they go in the review verbatim.
+Keep the concrete responses / log lines / numbers — they go in the review verbatim. For every finding, also capture its failure case: trigger, affected path, and observed outcome.
 
 Only after testing and analysis are complete, ask the user whether to invoke `full-code-review` on the PR. Do not invoke it automatically.
 
@@ -227,10 +235,10 @@ Summarize to the user first: what works (with evidence), what's broken/risky (`f
 
 ### When to post a review comment
 
-**Only post a review comment if something failed, looks risky, or you have a question.** If the PR is clean and all tests pass, do not post anything — just report the verdict to the user and move on.
+**Only post a review comment for a demonstrated in-scope failure, a concrete risk with a traced path, or a user-approved question.** If the PR is clean and all tests pass, do not post anything — just report the verdict to the user and move on.
 
 - All tests pass, no concerns → **no comment on GitHub**, just tell the user "clean, approved"
-- Test failure, bug found, or design concern → post a comment with the finding
+- Test failure or traced in-scope risk → post a comment with the finding
 - Unclear about author's intent → **ask the user first** before posting any question to the author
 
 **Always clear questions with the user before posting them as review comments.** Never ask the PR author something directly without the user's explicit approval.
@@ -268,7 +276,7 @@ Paste concrete evidence here: curl responses, aiperf summary table, log lines, e
 
 ### Code Review
 
-<Bullet points of findings — one per issue or positive observation. Include file:line references.>
+<Bullet points of findings — one per issue or positive observation. Each issue states `Failure case: <trigger> → <outcome>` and includes `file:line` references.>
 ```
 
 **IMPORTANT: Always create a DRAFT review first.** GitHub does not allow deleting submitted reviews (only pending/draft ones). Create the review as a draft, confirm with the user, then submit it.
