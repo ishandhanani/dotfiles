@@ -32,6 +32,16 @@ This skill vendors the `gh-address-comments` GraphQL approach because flat PR co
 6. After selected work, add a short GitHub comment for each fixed row: `[AI] Fixed in <commit>. <one-sentence summary>`.
 7. Return an updated mini-ledger with `fixed`, `reply drafted`, `deferred`, or `not actionable`.
 
+## Explicit Review Loop
+
+When the user explicitly asks to keep fixing and rechecking a named reviewer or CI bot, repeat this loop until it is clean:
+
+1. Address every current actionable row, run the smallest relevant check, commit, and push.
+2. Poll the named reviewer status for the pushed head, then refetch the ledger.
+3. Repeat only for new unresolved, non-outdated threads from that reviewer.
+
+Finish only when the reviewer reports success for the current head and the refreshed ledger has zero such threads. Do not wait for unrelated CI or merge the PR unless the user asks.
+
 ## Ledger Table
 
 Use this simple table shape:
