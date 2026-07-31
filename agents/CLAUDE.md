@@ -62,7 +62,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Codex-managed worktrees under `$CODEX_HOME/worktrees` are exempt from the manual layout convention.
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.
 - Worktrees for parallel branch development. On rebase conflicts: preserve local work first (`git stash` or backup branch), then resolve. Don't force-reset without asking.
-- For Dynamo and SGLang worktrees, do not push branches or forks unless I explicitly say to push.
+- For Dynamo and SGLang implementation work, publish branches directly to canonical `origin` (`ai-dynamo/dynamo` or `sgl-project/sglang`) and open same-repository PRs. Use a personal or external fork only when I explicitly request it.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
 - When reviewing a PR, use a repository-specific empirical review skill when available. Dynamo and SGLang reviews must finish their normal testing before asking whether to invoke `full-code-review`; use `full-code-review` directly for combined general and deep review requests.
 - When posting PR review findings, submit a formal GitHub `COMMENT` review with each finding attached to the relevant diff line. Use `REQUEST_CHANGES` only when explicitly requested; never use a generic PR conversation comment.
