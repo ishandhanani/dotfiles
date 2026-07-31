@@ -36,11 +36,11 @@ This skill vendors the `gh-address-comments` GraphQL approach because flat PR co
 
 When the user explicitly asks to keep fixing and rechecking a named reviewer or CI bot, repeat this loop until it is clean:
 
-1. Address every current actionable row, run the smallest relevant check, commit, and push.
+1. Re-triage every current row: fix only demonstrated actionable failures; for the rest, reply with concrete code or test evidence instead of adding a speculative change. Run the smallest relevant check, commit, and push only when code changed.
 2. Poll the named reviewer status for the pushed head, then refetch the ledger.
 3. Repeat only for new unresolved, non-outdated threads from that reviewer.
 
-Finish only when the reviewer reports success for the current head and the refreshed ledger has zero such threads. Do not wait for unrelated CI or merge the PR unless the user asks.
+Finish only when the reviewer reports success for the current head and the refreshed ledger has zero actionable threads from that reviewer. Each declined finding needs an evidence-backed reply when GitHub writes are authorized; leave genuinely ambiguous threads open for the user. Do not wait for unrelated CI or merge the PR unless the user asks.
 
 ## Ledger Table
 
