@@ -4,7 +4,7 @@
 
 {
   home.activation.installAgentCLIs = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin:$PATH"
+    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin:$PATH"
     export CI=1
     set -eo pipefail
 
