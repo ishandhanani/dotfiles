@@ -34,6 +34,7 @@ in
     ./modules/git.nix
     ./modules/zsh.nix
     ./modules/uvx.nix
+    ./modules/agents.nix
     ./modules/rust.nix
     ./modules/go.nix
     ./modules/bash.nix
