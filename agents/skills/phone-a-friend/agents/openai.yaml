@@ -1,4 +1,4 @@
 interface:
   display_name: "Phone a Friend"
-  short_description: "Ask Claude for independent verification"
-  default_prompt: "Use $phone-a-friend to get an independent Claude verification of this decision."
+  short_description: "Ask claude, agent, or Devin for independent verification"
+  default_prompt: "Use $phone-a-friend with an appropriate --speed to get an independent verification of this decision."

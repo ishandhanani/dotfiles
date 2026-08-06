@@ -11,7 +11,7 @@ LOCAL_SKILLS_SRC="$HOME/.local_skills"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 if [[ $# -gt 0 ]]; then
-    echo "setup.sh takes no arguments and always installs both Claude + Codex."
+    echo "setup.sh takes no arguments and always installs Claude, Codex, Cursor, Devin, and Hermes (when present)."
     exit 1
 fi
 
@@ -66,6 +66,28 @@ create_link() {
     echo "Linked $dest -> $src"
 }
 
+each_skill_dir() {
+    local skill_dir
+    for skill_dir in "$SKILLS_SRC"/* "$LOCAL_SKILLS_SRC"/*; do
+        if [[ -d "$skill_dir" ]]; then
+            printf '%s\n' "$skill_dir"
+        fi
+    done
+}
+
+link_skills_into() {
+    local label="$1"
+    local target_skills_dir="$2"
+    local backup_dir="$3"
+    local skill_dir skill_name
+
+    mkdir -p "$target_skills_dir"
+    while IFS= read -r skill_dir; do
+        skill_name="$(basename "$skill_dir")"
+        create_link "$skill_dir" "$target_skills_dir/$skill_name" "$backup_dir"
+    done < <(each_skill_dir)
+}
+
 install_agent() {
     local label="$1"
     local target_dir="$2"
@@ -78,24 +100,37 @@ install_agent() {
     mkdir -p "$target_dir"
 
     create_link "$CLAUDE_SRC" "$target_dir/$primary_instruction" "$backup_dir"
-    mkdir -p "$target_dir/skills"
-
-    for skill_dir in "$SKILLS_SRC"/* "$LOCAL_SKILLS_SRC"/*; do
-        if [[ -d "$skill_dir" ]]; then
-            local skill_name
-            skill_name="$(basename "$skill_dir")"
-            create_link "$skill_dir" "$target_dir/skills/$skill_name" "$backup_dir"
-        fi
-    done
+    link_skills_into "$label" "$target_dir/skills" "$backup_dir"
 
     echo ""
     echo "Installed in $target_dir:"
     echo "  $primary_instruction"
-    for skill_dir in "$SKILLS_SRC"/* "$LOCAL_SKILLS_SRC"/*; do
-        if [[ -d "$skill_dir" ]]; then
-            echo "  skills/$(basename "$skill_dir")"
-        fi
-    done
+    while IFS= read -r skill_dir; do
+        echo "  skills/$(basename "$skill_dir")"
+    done < <(each_skill_dir)
+
+    if [[ -d "$backup_dir" ]]; then
+        echo ""
+        echo "Backed up previous ${label} files to: $backup_dir"
+    fi
+}
+
+# Skills-only install for agents that discover ~/.…/skills without a CLAUDE.md home.
+install_skills_home() {
+    local label="$1"
+    local target_skills_dir="$2"
+    local backup_dir="$HOME/.${label}-backup-${TIMESTAMP}"
+
+    echo ""
+    echo "Setting up ${label} skills..."
+    echo "-----------------------------"
+    link_skills_into "$label" "$target_skills_dir" "$backup_dir"
+
+    echo ""
+    echo "Installed in $target_skills_dir:"
+    while IFS= read -r skill_dir; do
+        echo "  $(basename "$skill_dir")"
+    done < <(each_skill_dir)
 
     if [[ -d "$backup_dir" ]]; then
         echo ""
@@ -126,6 +161,14 @@ CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 backup_if_needed "$CODEX_DIR/AGENTS.md" "$HOME/.codex-backup-${TIMESTAMP}"
 ln -sfn "$CODEX_DIR/CLAUDE.md" "$CODEX_DIR/AGENTS.md"
 echo "Linked $CODEX_DIR/AGENTS.md -> $CODEX_DIR/CLAUDE.md"
+
+# Cursor personal skills: ~/.cursor/skills (never ~/.cursor/skills-cursor).
+install_skills_home "cursor" "$HOME/.cursor/skills"
+
+# Devin user skills: primary documented global root.
+# (~/.agents/skills is also scanned by Devin but is left for third-party /
+# shared installs so we do not triple-list against ~/.claude compat.)
+install_skills_home "devin" "$HOME/.config/devin/skills"
 
 # Hermes discovers skills natively via skills.external_dirs (no per-skill
 # symlinks). Point it at this repo's skills dir if hermes is installed.

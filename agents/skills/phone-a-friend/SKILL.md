@@ -1,41 +1,103 @@
 ---
 name: phone-a-friend
-description: Ask one or more fresh Claude Code processes for parallel, independent, read-only verification, design adjudication, or adversarial review while Codex retains ownership of the task. Use when the user explicitly asks for a Claude second opinion, cross-model verification, parallel independent review, or when a consequential code/design/benchmark decision benefits from an unprimed verifier.
+description: Ask one or more fresh friend agents (claude, Cursor agent, or Devin) for parallel independent verification, design adjudication, or opt-in delegated action while the caller retains ownership. Use when the user asks for a second opinion, cross-model verification, parallel independent review, a fast sniff from another agent, or when a consequential code/design/benchmark decision benefits from an unprimed verifier.
 ---
 
 # Phone a Friend
 
-Use Claude as an independent verifier, not as an implementation owner.
+Dispatch one or more fresh friend processes. The caller owns synthesis and the final decision; never treat agreement as proof.
+
+## Routing
+
+Pick axes before launching:
+
+1. **`--speed`** (primary): `fast` | `balanced` | `deep`
+2. **`--capability`**: `verify` (default, read-only) | `act` (writes/shell; only when explicitly authorized)
+3. **`--friend`**: `auto` (default from speed) | `claude` | `agent` | `devin`
+
+| speed | default friend | default model | use when |
+|-------|----------------|---------------|----------|
+| `fast` | `devin` | `swe-1-7-lightning` | cheap parallel sniff, latency-sensitive |
+| `balanced` | `claude` | CLI default | normal second opinion |
+| `deep` | `claude` | `opus` | consequential adjudication |
+
+Override with `--friend` / `--model` when needed. Prefer **claude** when independence matters more than latency: only Claude's verify profile strips ambient project memory (`--safe-mode`). `agent` / `devin` may still see workspace rules/skills.
+
+### Capability flags (enforced by the runner)
+
+| friend | `verify` | `act` |
+|--------|----------|-------|
+| `claude` | `--safe-mode --permission-mode plan` | `--permission-mode bypassPermissions` |
+| `agent` | `--mode plan --trust` | `--yolo --trust` |
+| `devin` | `--permission-mode auto` | `--permission-mode dangerous` |
 
 ## Workflow
 
-1. Decide the verification question before launching anything. Skip delegation when local evidence already answers a routine question.
-2. Create one to three narrow prompts. Give each friend the artifact or exact local paths, the goal, constraints, and requested output. Default to read-only inspection and ask for a verdict plus file-and-line evidence.
-3. Preserve independence. Do not include Codex's conclusion, suspected bug, preferred fix, or another friend's answer unless the task is explicitly adjudication.
-4. Run fresh Claude processes in parallel with `scripts/phone_a_friend.py`. Keep the current worktree as `--cwd`; add other required roots with `--add-dir`.
-5. Verify material claims against the artifact. Codex owns synthesis and the final decision; never treat agreement as proof.
-6. Report consensus, disagreement, and any locally confirmed finding. Do not dump raw friend transcripts unless requested.
+1. Decide the question. Skip delegation when local evidence already answers it.
+2. Choose `--speed` (and `--capability act` only if the user authorized edits/commands).
+3. Create one to three narrow prompts. Give each friend the artifact or exact local paths, goal, constraints, and requested output.
+4. Preserve independence. Do not include the caller's conclusion, suspected bug, preferred fix, or another friend's answer unless the task is explicitly adjudication.
+5. Run fresh processes in parallel with `scripts/phone_a_friend.py`. Keep the current worktree as `--cwd`; add other required roots with `--add-dir` (claude/agent only).
+6. Verify material claims against the artifact. Report consensus, disagreement, and any locally confirmed finding. Do not dump raw friend transcripts unless requested.
+7. If a friend is unavailable, unauthenticated, times out, or errors, report that. Never silently substitute another backend.
 
 ## Invocation
 
 ```bash
 uv run "${CODEX_HOME:-$HOME/.codex}/skills/phone-a-friend/scripts/phone_a_friend.py" \
   --cwd /absolute/worktree \
+  --speed balanced \
+  --capability verify \
   --prompt 'Review the current diff for correctness. Read only. Return APPROVE or REJECT, then material findings with file:line evidence.' \
   --prompt 'Independently inspect the same diff for hot-path regressions and unnecessary abstractions. Read only. Return material findings with file:line evidence.'
 ```
 
-The runner is a self-contained `uv` script with inline dependency metadata. It uses Claude's safe mode and plan permission mode, starts one fresh process per prompt, disables Claude session persistence, and returns structured JSON. Safe mode prevents project instructions, skills, hooks, plugins, and memory from silently priming the verifier; put every required constraint in the prompt. If `claude` is unavailable, unauthenticated, times out, or returns an error, report that instead of silently substituting another model.
+Fast sniff:
+
+```bash
+uv run "${CODEX_HOME:-$HOME/.codex}/skills/phone-a-friend/scripts/phone_a_friend.py" \
+  --cwd /absolute/worktree \
+  --speed fast \
+  --prompt 'Read-only: does this diff obviously break the hot path in <file>? Verdict + file:line evidence only.'
+```
+
+Deep Claude adjudication (explicit friend):
+
+```bash
+uv run "${CODEX_HOME:-$HOME/.codex}/skills/phone-a-friend/scripts/phone_a_friend.py" \
+  --cwd /absolute/worktree \
+  --speed deep \
+  --friend claude \
+  --prompt 'Compare only options A and B against <constraints>. Do not edit. Approve one, reject the other, cite file:line evidence.'
+```
+
+Opt-in act (user must authorize):
+
+```bash
+uv run "${CODEX_HOME:-$HOME/.codex}/skills/phone-a-friend/scripts/phone_a_friend.py" \
+  --cwd /absolute/worktree \
+  --speed fast \
+  --capability act \
+  --prompt 'Apply the minimal fix described in <paths>. Do not broaden scope.'
+```
+
+Dry-run (print resolved profile + argv, no execution):
+
+```bash
+uv run .../phone_a_friend.py --dry-run --cwd /absolute/worktree --speed fast --prompt '...'
+```
+
+The runner is a self-contained `uv` script. One fresh process per `--prompt`; no session resume/cross-feed. Returns structured JSON. Devin has no JSON output mode — its payload lands in `stdout`. Devin also does not support `--add-dir`; name extra roots in the prompt or use `--friend claude|agent`.
 
 ## Prompt rules
 
 - Give the minimum task-local context needed to inspect the raw artifact.
-- Use separate prompts for genuinely distinct review surfaces; use duplicate scopes only when independent agreement itself matters.
-- State `Do not edit files, launch services, or change external state` unless the user explicitly authorized those actions.
+- Use separate prompts for genuinely distinct review surfaces; duplicate scopes only when independent agreement itself matters.
+- For `verify`, state `Do not edit files, launch services, or change external state`.
+- For `act`, require an explicit user authorization trail in the calling turn; keep the blast radius minimal.
 - Ask for material findings only. Require exact evidence and a concise verdict.
-- Never send secrets, credentials, unrelated transcript history, or private data that the task does not require.
-- Never add `--dangerously-skip-permissions`; the runner intentionally enforces read-only plan mode.
-- Never remove `--safe-mode`; ambient project memory can manufacture false consensus.
+- Never send secrets, credentials, unrelated transcript history, or private data the task does not require.
+- Do not weaken verify flags (`--safe-mode`, plan/auto modes) to chase a green run.
 - Do not resume or cross-feed friend sessions. Fresh context is the point.
 
 ## Useful prompt shapes
@@ -56,4 +118,10 @@ Benchmark adjudication:
 
 ```text
 Read <artifacts>. The predeclared guard is <guard>. Decide the minimum defensible next action among <choices>. Identify confounders and cite artifact evidence. Do not edit or launch workloads.
+```
+
+Fast sniff:
+
+```text
+Read-only skim of <paths or diff>. Question: <yes/no or A/B>. Return verdict first, then at most three file:line evidence bullets. No fixes.
 ```
