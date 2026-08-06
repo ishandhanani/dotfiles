@@ -104,7 +104,8 @@ def build_agent(prompt: str, resolved: Resolved, args: argparse.Namespace) -> li
         "--trust",
     ]
     if resolved.capability == "verify":
-        command.extend(["--mode", "plan"])
+        # `ask` is read-only Q&A mode; `plan` only proposes plans and may not answer.
+        command.extend(["--mode", "ask"])
     else:
         command.append("--yolo")
     if resolved.model:

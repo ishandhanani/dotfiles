@@ -28,8 +28,14 @@ Override with `--friend` / `--model` when needed. Prefer **claude** when indepen
 | friend | `verify` | `act` |
 |--------|----------|-------|
 | `claude` | `--safe-mode --permission-mode plan` | `--permission-mode bypassPermissions` |
-| `agent` | `--mode plan --trust` | `--yolo --trust` |
+| `agent` | `--mode ask --trust` | `--yolo --trust` |
 | `devin` | `--permission-mode auto` | `--permission-mode dangerous` |
+
+### Backend-specific notes
+
+- **claude**: Use when independence matters most. `--safe-mode` strips ambient project memory/skills, so the friend is least likely to be primed by your own context. Best for verify tasks that need exact file:line evidence.
+- **agent** (Cursor): Requires `agent login` or `CURSOR_API_KEY`. Verify mode uses `--mode ask`, which is read-only Q&A. If you see a plan or outline instead of an answer, the prompt may be too broad; narrow it or switch to `claude`/`devin`. `agent` may still see global Cursor skills/context even with `--workspace` and `--add-dir`.
+- **devin**: Cheapest/fastest for sniff tasks. No JSON output; response lands in `stdout`. Does not support `--add-dir`; name extra roots in the prompt.
 
 ## Workflow
 
@@ -96,8 +102,9 @@ The runner is a self-contained `uv` script. One fresh process per `--prompt`; no
 - For `verify`, state `Do not edit files, launch services, or change external state`.
 - For `act`, require an explicit user authorization trail in the calling turn; keep the blast radius minimal.
 - Ask for material findings only. Require exact evidence and a concise verdict.
+- For backends that can fall back to planning mode (`agent`), explicitly demand the final answer: `Answer the question and return the result. Do not output a plan, outline, or meta-commentary.`
 - Never send secrets, credentials, unrelated transcript history, or private data the task does not require.
-- Do not weaken verify flags (`--safe-mode`, plan/auto modes) to chase a green run.
+- Do not weaken verify flags (`--safe-mode`, ask/auto modes) to chase a green run.
 - Do not resume or cross-feed friend sessions. Fresh context is the point.
 
 ## Useful prompt shapes
