@@ -92,7 +92,7 @@ install_agent() {
     local label="$1"
     local target_dir="$2"
     local primary_instruction="$3"
-    local backup_dir="$HOME/.${label}-backup-${TIMESTAMP}"
+    local backup_dir="$HOME/.$(basename "$target_dir")-backup-${TIMESTAMP}"
 
     echo ""
     echo "Setting up ${label} config..."
@@ -140,7 +140,7 @@ install_skills_home() {
 
 install_claude_runtime_files() {
     local target_dir="$1"
-    local backup_dir="$HOME/.claude-backup-${TIMESTAMP}"
+    local backup_dir="$HOME/.$(basename "$target_dir")-backup-${TIMESTAMP}"
 
     create_link "$CLAUDE_SETTINGS_SRC" "$target_dir/claude-settings.json" "$backup_dir"
     create_link "$CLAUDE_STATUSLINE_SRC" "$target_dir/statusline-command.sh" "$backup_dir"
@@ -153,8 +153,10 @@ echo "Agent config setup"
 echo "=================="
 echo "Source: $SOURCE_DIR"
 
-install_agent "claude" "$HOME/.claude" "CLAUDE.md"
-install_claude_runtime_files "$HOME/.claude"
+CLAUDE_DIR="${CLAUDE_HOME:-$HOME/.claude}"
+
+install_agent "claude" "$CLAUDE_DIR" "CLAUDE.md"
+install_claude_runtime_files "$CLAUDE_DIR"
 install_agent "codex" "${CODEX_HOME:-$HOME/.codex}" "CLAUDE.md"
 
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
