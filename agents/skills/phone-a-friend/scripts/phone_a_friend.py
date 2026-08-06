@@ -80,15 +80,17 @@ def resolve(args: argparse.Namespace) -> Resolved:
 
 
 def build_claude(prompt: str, resolved: Resolved, args: argparse.Namespace) -> list[str]:
-    command = ["claude", "-p", "--no-session-persistence", "--output-format", "json"]
+    # `--add-dir` must appear before `-p`; the Claude CLI rejects it after `-p`.
+    command = ["claude"]
+    for directory in args.add_dir:
+        command.extend(["--add-dir", str(directory.resolve())])
+    command.extend(["-p", "--no-session-persistence", "--output-format", "json"])
     if resolved.capability == "verify":
         command.extend(["--safe-mode", "--permission-mode", "plan"])
     else:
         command.extend(["--permission-mode", "bypassPermissions"])
     if resolved.model:
         command.extend(["--model", resolved.model])
-    for directory in args.add_dir:
-        command.extend(["--add-dir", str(directory.resolve())])
     command.append(prompt)
     return command
 
