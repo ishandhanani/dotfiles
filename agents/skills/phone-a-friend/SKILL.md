@@ -35,7 +35,7 @@ Override with `--friend` / `--model` when needed. Prefer **claude** when indepen
 
 - **claude**: Use when independence matters most. `--safe-mode` strips ambient project memory/skills, so the friend is least likely to be primed by your own context. Best for verify tasks that need exact file:line evidence.
 - **agent** (Cursor): Requires `agent login` or `CURSOR_API_KEY`. Verify mode uses `--mode ask`, which is read-only Q&A. If you see a plan or outline instead of an answer, the prompt may be too broad; narrow it or switch to `claude`/`devin`. `agent` may still see global Cursor skills/context even with `--workspace` and `--add-dir`.
-- **devin**: Cheapest/fastest for sniff tasks. No JSON output; response lands in `stdout`. Does not support `--add-dir`; name extra roots in the prompt.
+- **devin**: Cheapest/fastest for parallel bounded work. Its CLI emits plain text, which the runner normalizes into each result's `response` field. Does not support `--add-dir`; name extra roots in the prompt.
 
 ## Workflow
 
@@ -93,7 +93,31 @@ Dry-run (print resolved profile + argv, no execution):
 uv run .../phone_a_friend.py --dry-run --cwd /absolute/worktree --speed fast --prompt '...'
 ```
 
-The runner is a self-contained `uv` script. One fresh process per `--prompt`; no session resume/cross-feed. Returns structured JSON. Devin has no JSON output mode — its payload lands in `stdout`. Devin also does not support `--add-dir`; name extra roots in the prompt or use `--friend claude|agent`.
+The runner is a self-contained `uv` script. One fresh process per `--prompt`; no session resume/cross-feed. It returns a JSON array in prompt order, with every answer under `response`. Devin's answer is a string; native structured backends may return an object. Fast verify jobs default to a 180-second per-friend deadline and fast act jobs to 300 seconds; override `--timeout-seconds` when the task warrants more. Devin does not support `--add-dir`; name extra roots in the prompt or use `--friend claude|agent`.
+
+### Parallel Devin workers
+
+Repeat `--prompt` two or three times in one invocation to run that many fast Devin jobs in parallel against the same `--cwd`. Decompose by ownership, not by asking every worker the whole question:
+
+- Decompose by distinct surface or question. Assign one prompt per concern (correctness, hot-path regression, test gaps, etc.) so workers do not duplicate scope.
+- Give each a strict, independent deliverable. Specify the exact return format: a verdict, ranked choices, or findings with file:line evidence. Do not include your own conclusion, suspected bug, or another worker's output.
+- Check each result's `ok` first. For successes consume `response`; for failures report `error` or `stderr` and do not treat a missing answer as agreement. Match `friend` to prompt order, then synthesize consensus, disagreement, and locally verified claims without dumping commands or raw transcripts.
+- Parallel `act` jobs in one working directory require explicit disjoint file ownership and no shared-state operations: no overlapping edits, git/index operations, shared build directories, or shared services. Before launch, list each worker's owned paths and confirm they do not overlap. Otherwise use separate worktrees, or run the jobs sequentially.
+- An `act` timeout can leave useful but partial edits. Inspect status and diff, confirm only the assigned paths changed, and validate them before keeping or retrying; never blindly rerun the prompt.
+
+Three fast verify passes on a diff:
+
+```bash
+uv run "${CODEX_HOME:-$HOME/.codex}/skills/phone-a-friend/scripts/phone_a_friend.py" \
+  --cwd /absolute/worktree \
+  --speed fast \
+  --friend devin \
+  --prompt 'Read-only correctness review of the current diff. Return APPROVE or REJECT, then up to five blockers with file:line evidence.' \
+  --prompt 'Read-only hot-path regression check. Return PASS or CONCERN, then any hot-path slowdown with file:line evidence.' \
+  --prompt 'Read-only test/edge-case gap check. Return PASS or GAP, then missing test or edge-case coverage with file:line evidence.'
+```
+
+To extract ordered answers without hiding failures, pipe the command to `jq -r '.[] | if .ok then (.response | if type == "string" then . else tojson end) else "ERROR friend \(.friend): \(.error // .stderr // "no response")" end'`. Synthesize successful answers locally; never substitute worker agreement for verification.
 
 ## Prompt rules
 

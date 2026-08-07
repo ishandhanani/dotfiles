@@ -21,6 +21,12 @@ FRIENDS = ("claude", "agent", "devin")
 SPEEDS = ("fast", "balanced", "deep")
 CAPABILITIES = ("verify", "act")
 
+DEFAULT_TIMEOUT_SECONDS = {
+    "fast": 180,
+    "balanced": 900,
+    "deep": 900,
+}
+
 # speed -> default friend when --friend auto
 SPEED_DEFAULT_FRIEND = {
     "fast": "devin",
@@ -59,7 +65,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--friend", choices=("auto", *FRIENDS), default="auto")
     parser.add_argument("--capability", choices=CAPABILITIES, default="verify")
     parser.add_argument("--model", help="Override the profile default model")
-    parser.add_argument("--timeout-seconds", type=int, default=900)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        help="Per-friend deadline (default: fast verify 180, fast act 300, otherwise 900)",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -175,13 +185,16 @@ def ask(index: int, prompt: str, resolved: Resolved, args: argparse.Namespace) -
         result["stderr"] = completed.stderr.strip()
     stdout = completed.stdout.strip()
     if not stdout:
+        if result["ok"]:
+            result["ok"] = False
+            result["error"] = "friend returned no response"
         return result
     try:
         result["response"] = json.loads(stdout)
         if isinstance(result["response"], dict) and result["response"].get("is_error"):
             result["ok"] = False
     except json.JSONDecodeError:
-        result["stdout"] = stdout
+        result["response"] = stdout
     return result
 
 
@@ -190,6 +203,12 @@ def main() -> int:
     if not args.cwd.is_dir():
         print(json.dumps({"error": f"cwd is not a directory: {args.cwd}"}))
         return 2
+    if args.timeout_seconds is None:
+        args.timeout_seconds = (
+            300
+            if args.speed == "fast" and args.capability == "act"
+            else DEFAULT_TIMEOUT_SECONDS[args.speed]
+        )
     if args.timeout_seconds <= 0:
         print(json.dumps({"error": "timeout-seconds must be positive"}))
         return 2
