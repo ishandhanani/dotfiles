@@ -48,7 +48,7 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Before Python/build/test work, inspect `$VIRTUAL_ENV` and the active checkout's `<root>/.venv`. Use or create only `<root>/.venv`; never copy, symlink, reuse, or mutate another checkout's venv. Verify editable imports resolve inside the active checkout.
 
 ### Build Commands
-- **Dynamo** (Rust + Python): `cd <root>/lib/bindings/python && maturin develop --uv && cd <root> && uv pip install -e .`
+- **Dynamo** (Rust + Python): `cd <root>/lib/bindings/python && CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target" maturin develop --uv && cd <root> && uv pip install -e .` -- keep targets per worktree; never share them across worktrees.
 - **SGLang** (Python): `cd <root> && uv pip install -e "python"`
 - **aiperf** (Python): `cd ~/aiperf && uv pip install -e .`
 

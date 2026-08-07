@@ -122,7 +122,7 @@ With the checkout-local venv active, rebuild only what changed and verify editab
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 # Rust touched? rebuild the binding (slow, incremental):
-cd "$ROOT/lib/bindings/python" && maturin develop --uv
+cd "$ROOT/lib/bindings/python" && CARGO_TARGET_DIR="$ROOT/target" maturin develop --uv
 # Always refresh the Python package (fast):
 cd "$ROOT" && uv pip install -e .
 python -c "import dynamo, dynamo.sglang, sglang; print('ok', dynamo.__file__, sglang.__version__)"

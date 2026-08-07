@@ -93,7 +93,7 @@ A fresh venv has neither `maturin` nor the `nixl` Python bindings — install bo
 
 ```bash
 uv pip install maturin nixl
-cd /ephemeral/dynamo/lib/bindings/python && maturin develop --uv
+cd /ephemeral/dynamo/lib/bindings/python && CARGO_TARGET_DIR=/ephemeral/dynamo/target maturin develop --uv
 cd /ephemeral/dynamo && uv pip install -e .
 ```
 

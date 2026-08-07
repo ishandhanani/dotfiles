@@ -68,7 +68,7 @@ uv pip install nixl maturin
 cd lib/bindings/python
 source /home/ubuntu/dynamo/.venv/bin/activate
 source "$HOME/.cargo/env"   # if Rust was just installed
-maturin develop --uv
+CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target" maturin develop --uv
 cd ../..
 ```
 

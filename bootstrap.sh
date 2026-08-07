@@ -256,6 +256,8 @@ DOTFILES_BASHRC
 
 ok "Wrote ~/.bashrc.d/dotfiles.bash"
 
+install -m 755 "$DOTFILES_DIR/bin/clean-rust-targets" "$HOME/.local/bin/clean-rust-targets"
+
 # ---------------------------------------------------------------------------
 # 11. Starship config -- mirrors programs.starship.settings
 # ---------------------------------------------------------------------------

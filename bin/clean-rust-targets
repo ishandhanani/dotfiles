@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Remove reproducible Cargo outputs without removing worktrees or virtualenvs.
+set -euo pipefail
+
+if [[ "${1:-}" != "--apply" ]]; then
+  printf 'Usage: clean-rust-targets --apply\n'
+  printf 'Refusing to delete Cargo target directories without --apply.\n'
+  exit 2
+fi
+
+if pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; then
+  printf 'Cargo or rustc is running; try again after builds finish.\n' >&2
+  exit 1
+fi
+
+target_list=$(mktemp)
+trap 'rm -f -- "$target_list"' EXIT
+
+find /ephemeral -xdev -type d -name target -print0 2>/dev/null | while IFS= read -r -d '' target; do
+  if [[ -f "$target/.rustc_info.json" ]]; then
+    printf '%s\0' "$target"
+  fi
+done > "$target_list"
+
+while IFS= read -r -d '' target; do
+  du -sh "$target"
+  rm -rf -- "$target"
+done < "$target_list"

@@ -66,6 +66,11 @@ in
     gh-notify
     sccache
   ];
+
+  home.file.".local/bin/clean-rust-targets" = {
+    source = ../bin/clean-rust-targets;
+    executable = true;
+  };
   
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
