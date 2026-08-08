@@ -33,7 +33,6 @@ class TestPhoneAFriend(unittest.IsolatedAsyncioTestCase):
             dry_run=False,
             capability="act",
             confirm_parallel_act=False,
-            timeout_seconds=30,
             speed="fast",
         )
 
@@ -75,22 +74,7 @@ class TestPhoneAFriend(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(client.response("session"), "answer")
 
-    async def test_chat_is_unbounded_and_prompt_errors_are_records(self):
-        args = Namespace(
-            cwd=Path("/tmp"),
-            add_dir=[],
-            chat=True,
-            prompt=None,
-            dry_run=False,
-            capability="verify",
-            confirm_parallel_act=False,
-            timeout_seconds=None,
-            speed="fast",
-        )
-
-        self.assertIsNone(phone_a_friend.validate_args(args))
-        self.assertIsNone(args.timeout_seconds)
-
+    async def test_prompt_errors_are_records(self):
         class BrokenConnection:
             async def prompt(self, **kwargs):
                 raise RuntimeError("connection lost")
@@ -100,7 +84,6 @@ class TestPhoneAFriend(unittest.IsolatedAsyncioTestCase):
             phone_a_friend.FriendClient("verify"),
             "session",
             "prompt",
-            args.timeout_seconds,
         )
         self.assertEqual(result, {"ok": False, "error": "connection lost"})
 

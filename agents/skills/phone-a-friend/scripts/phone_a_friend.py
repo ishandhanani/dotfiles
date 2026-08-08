@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
 import json
 import shutil
 import sys
@@ -24,9 +23,7 @@ FRIENDS = ("claude", "agent", "devin")
 SPEEDS = ("fast", "balanced", "deep")
 CAPABILITIES = ("verify", "act")
 CLAUDE_ACP_ADAPTER = "@agentclientprotocol/claude-agent-acp@0.65.0"
-ACP_STARTUP_TIMEOUT_SECONDS = 90
 
-DEFAULT_TIMEOUT_SECONDS = {"fast": 180, "balanced": 900, "deep": 900}
 SPEED_DEFAULT_FRIEND = {"fast": "devin", "balanced": "claude", "deep": "claude"}
 DEFAULT_MODELS: dict[tuple[str, str], str] = {
     ("devin", "fast"): "swe-1-7-lightning",
@@ -121,11 +118,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", help="Override the profile default ACP model value")
     parser.add_argument(
-        "--timeout-seconds",
-        type=int,
-        help="Per-prompt deadline (default: none in chat; bounded in fanout)",
-    )
-    parser.add_argument(
         "--dry-run", action="store_true", help="Print the resolved ACP profile only"
     )
     return parser.parse_args()
@@ -196,20 +188,12 @@ async def prompt_session(
     client: FriendClient,
     session_id: str,
     prompt: str,
-    timeout_seconds: int | None,
 ) -> dict[str, Any]:
     client.start_turn(session_id)
     try:
-        pending = conn.prompt(session_id=session_id, prompt=[text_block(prompt)])
-        prompt_result = (
-            await pending
-            if timeout_seconds is None
-            else await asyncio.wait_for(pending, timeout_seconds)
+        prompt_result = await conn.prompt(
+            session_id=session_id, prompt=[text_block(prompt)]
         )
-    except asyncio.TimeoutError:
-        with contextlib.suppress(Exception):
-            await conn.cancel(session_id=session_id)
-        return {"ok": False, "error": f"timed out after {timeout_seconds}s"}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
@@ -238,18 +222,13 @@ async def run_one(
 ) -> dict[str, Any]:
     meta = result_meta(index, resolved)
     try:
-        session = await asyncio.wait_for(
-            conn.new_session(
-                cwd=str(args.cwd),
-                additional_directories=[str(path) for path in args.add_dir],
-                mcp_servers=[],
-            ),
-            min(args.timeout_seconds, ACP_STARTUP_TIMEOUT_SECONDS),
+        session = await conn.new_session(
+            cwd=str(args.cwd),
+            additional_directories=[str(path) for path in args.add_dir],
+            mcp_servers=[],
         )
         mode = await configure_session(conn, session, resolved)
-        answer = await prompt_session(
-            conn, client, session.session_id, prompt, args.timeout_seconds
-        )
+        answer = await prompt_session(conn, client, session.session_id, prompt)
         return {
             **meta,
             "session_id": str(session.session_id),
@@ -268,10 +247,7 @@ async def run_fanout(
         async with spawn_agent_process(
             client, *resolved.command, cwd=str(args.cwd)
         ) as (conn, _process):
-            await asyncio.wait_for(
-                conn.initialize(protocol_version=PROTOCOL_VERSION),
-                min(args.timeout_seconds, ACP_STARTUP_TIMEOUT_SECONDS),
-            )
+            await conn.initialize(protocol_version=PROTOCOL_VERSION)
             return await asyncio.gather(
                 *(
                     run_one(conn, client, index, prompt, resolved, args)
@@ -295,17 +271,11 @@ async def run_chat(args: argparse.Namespace, resolved: Resolved) -> int:
         conn,
         _process,
     ):
-        initialized = await asyncio.wait_for(
-            conn.initialize(protocol_version=PROTOCOL_VERSION),
-            ACP_STARTUP_TIMEOUT_SECONDS,
-        )
-        session = await asyncio.wait_for(
-            conn.new_session(
-                cwd=str(args.cwd),
-                additional_directories=[str(path) for path in args.add_dir],
-                mcp_servers=[],
-            ),
-            ACP_STARTUP_TIMEOUT_SECONDS,
+        initialized = await conn.initialize(protocol_version=PROTOCOL_VERSION)
+        session = await conn.new_session(
+            cwd=str(args.cwd),
+            additional_directories=[str(path) for path in args.add_dir],
+            mcp_servers=[],
         )
         mode = await configure_session(conn, session, resolved)
         session_id = str(session.session_id)
@@ -330,9 +300,7 @@ async def run_chat(args: argparse.Namespace, resolved: Resolved) -> int:
                 prompt = request.get("prompt")
                 if not isinstance(prompt, str) or not prompt.strip():
                     raise ValueError('expected {"prompt":"..."} or {"close":true}')
-                answer = await prompt_session(
-                    conn, client, session_id, prompt, args.timeout_seconds
-                )
+                answer = await prompt_session(conn, client, session_id, prompt)
                 emit({"type": "response", "session_id": session_id, **answer})
             except (json.JSONDecodeError, ValueError) as error:
                 emit({"type": "error", "ok": False, "error": str(error)})
@@ -360,14 +328,6 @@ def validate_args(args: argparse.Namespace) -> str | None:
             "parallel act requires --confirm-parallel-act after assigning disjoint "
             "paths and eliminating shared git/index, build, and service state"
         )
-    if args.timeout_seconds is None and not args.chat:
-        args.timeout_seconds = (
-            300
-            if args.speed == "fast" and args.capability == "act"
-            else DEFAULT_TIMEOUT_SECONDS[args.speed]
-        )
-    if args.timeout_seconds is not None and args.timeout_seconds <= 0:
-        return "timeout-seconds must be positive"
     return None
 
 

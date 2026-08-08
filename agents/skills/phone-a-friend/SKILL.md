@@ -62,7 +62,7 @@ ACP does not erase backend-global instructions or configuration. Include enough 
 
 The JSON array stays in prompt order. Each result includes `backend`, `session_id`, `mode`, `model`, `ok`, and either `response` or `error`. Repeating `--prompt` gives independent sessions, not a conversation.
 
-Use `--add-dir /absolute/path` for extra ACP workspace roots. Fanout defaults to 180 seconds per fast verify prompt, 300 for fast act, and 900 for balanced/deep; override with `--timeout-seconds`.
+Use `--add-dir /absolute/path` for extra ACP workspace roots. The runner does not impose deadlines; interrupt an agent externally when evidence shows it is stuck.
 
 ## Persistent multi-turn chat
 
@@ -85,7 +85,7 @@ Wait for one `ready` record, then write exactly one JSON object per line to the 
 {"close":true}
 ```
 
-The `ready.session_id` value is the ACP conversation ID, not the executor's terminal handle. Each prompt yields one `response` record with that same ACP ID; later turns retain the agent's session context. Chat prompts have no deadline unless `--timeout-seconds` is supplied. Invalid input yields an `error` record, and prompt failures yield an `ok:false` response without corrupting the stream. Closing stdin or sending `{"close":true}` tears down the ACP process.
+The `ready.session_id` value is the ACP conversation ID, not the executor's terminal handle. Each prompt yields one `response` record with that same ACP ID; later turns retain the agent's session context. The runner does not impose deadlines. Invalid input yields an `error` record, and prompt failures yield an `ok:false` response without corrupting the stream. Closing stdin or sending `{"close":true}` tears down the ACP process.
 
 When a Codex subagent owns this conversation, it must keep the terminal session identifier private to its branch, use subsequent stdin writes for follow-ups, and return only:
 
@@ -112,7 +112,7 @@ Delegated action:
 Work only in <owned paths>. Apply <bounded change>. Do not touch git/index, shared services, or unowned files. Run <targeted check>. Return changed paths, test result, and unresolved risks.
 ```
 
-Never send secrets, credentials, unrelated transcript history, or private data the task does not require. On timeout, inspect possible partial edits before retrying an `act` turn.
+Never send secrets, credentials, unrelated transcript history, or private data the task does not require. After externally interrupting an `act` turn, inspect possible partial edits before retrying.
 
 ## Diagnostics
 
@@ -122,4 +122,4 @@ Resolve routing without starting an agent:
 .../phone_a_friend.py --dry-run --cwd /absolute/worktree --speed fast --prompt '...'
 ```
 
-Authentication, adapter startup, missing executables, unsupported modes/models, timeouts, and empty answers are explicit failures. Fix the actual backend or narrow the task; do not weaken `verify` or silently fall back.
+Authentication, adapter startup, missing executables, unsupported modes/models, and empty answers are explicit failures. Fix the actual backend or narrow the task; do not weaken `verify` or silently fall back.
