@@ -24,6 +24,7 @@ FRIENDS = ("claude", "agent", "devin")
 SPEEDS = ("fast", "balanced", "deep")
 CAPABILITIES = ("verify", "act")
 CLAUDE_ACP_ADAPTER = "@agentclientprotocol/claude-agent-acp@0.65.0"
+ACP_STARTUP_TIMEOUT_SECONDS = 90
 
 DEFAULT_TIMEOUT_SECONDS = {"fast": 180, "balanced": 900, "deep": 900}
 SPEED_DEFAULT_FRIEND = {"fast": "devin", "balanced": "claude", "deep": "claude"}
@@ -119,7 +120,11 @@ def parse_args() -> argparse.Namespace:
         help="Confirm repeated act prompts have disjoint ownership and shared-state safety",
     )
     parser.add_argument("--model", help="Override the profile default ACP model value")
-    parser.add_argument("--timeout-seconds", type=int, help="Per-prompt deadline")
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        help="Per-prompt deadline (default: none in chat; bounded in fanout)",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Print the resolved ACP profile only"
     )
@@ -191,18 +196,22 @@ async def prompt_session(
     client: FriendClient,
     session_id: str,
     prompt: str,
-    timeout_seconds: int,
+    timeout_seconds: int | None,
 ) -> dict[str, Any]:
     client.start_turn(session_id)
     try:
-        prompt_result = await asyncio.wait_for(
-            conn.prompt(session_id=session_id, prompt=[text_block(prompt)]),
-            timeout_seconds,
+        pending = conn.prompt(session_id=session_id, prompt=[text_block(prompt)])
+        prompt_result = (
+            await pending
+            if timeout_seconds is None
+            else await asyncio.wait_for(pending, timeout_seconds)
         )
     except asyncio.TimeoutError:
         with contextlib.suppress(Exception):
             await conn.cancel(session_id=session_id)
         return {"ok": False, "error": f"timed out after {timeout_seconds}s"}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
 
     response = client.response(session_id)
     if not response:
@@ -235,7 +244,7 @@ async def run_one(
                 additional_directories=[str(path) for path in args.add_dir],
                 mcp_servers=[],
             ),
-            min(args.timeout_seconds, 90),
+            min(args.timeout_seconds, ACP_STARTUP_TIMEOUT_SECONDS),
         )
         mode = await configure_session(conn, session, resolved)
         answer = await prompt_session(
@@ -261,7 +270,7 @@ async def run_fanout(
         ) as (conn, _process):
             await asyncio.wait_for(
                 conn.initialize(protocol_version=PROTOCOL_VERSION),
-                min(args.timeout_seconds, 90),
+                min(args.timeout_seconds, ACP_STARTUP_TIMEOUT_SECONDS),
             )
             return await asyncio.gather(
                 *(
@@ -288,7 +297,7 @@ async def run_chat(args: argparse.Namespace, resolved: Resolved) -> int:
     ):
         initialized = await asyncio.wait_for(
             conn.initialize(protocol_version=PROTOCOL_VERSION),
-            min(args.timeout_seconds, 90),
+            ACP_STARTUP_TIMEOUT_SECONDS,
         )
         session = await asyncio.wait_for(
             conn.new_session(
@@ -296,7 +305,7 @@ async def run_chat(args: argparse.Namespace, resolved: Resolved) -> int:
                 additional_directories=[str(path) for path in args.add_dir],
                 mcp_servers=[],
             ),
-            min(args.timeout_seconds, 90),
+            ACP_STARTUP_TIMEOUT_SECONDS,
         )
         mode = await configure_session(conn, session, resolved)
         session_id = str(session.session_id)
@@ -304,7 +313,7 @@ async def run_chat(args: argparse.Namespace, resolved: Resolved) -> int:
             {
                 "type": "ready",
                 "backend": resolved.friend,
-                "agent": initialized.agent_info.name,
+                "agent": getattr(initialized.agent_info, "name", resolved.friend),
                 "session_id": session_id,
                 "mode": mode,
                 "model": resolved.model,
@@ -351,13 +360,13 @@ def validate_args(args: argparse.Namespace) -> str | None:
             "parallel act requires --confirm-parallel-act after assigning disjoint "
             "paths and eliminating shared git/index, build, and service state"
         )
-    if args.timeout_seconds is None:
+    if args.timeout_seconds is None and not args.chat:
         args.timeout_seconds = (
             300
             if args.speed == "fast" and args.capability == "act"
             else DEFAULT_TIMEOUT_SECONDS[args.speed]
         )
-    if args.timeout_seconds <= 0:
+    if args.timeout_seconds is not None and args.timeout_seconds <= 0:
         return "timeout-seconds must be positive"
     return None
 
