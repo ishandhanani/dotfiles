@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR Babysitter"
+  short_description: "Drive open PRs through Devin and CI"
+  default_prompt: "Use $pr-babysitter to monitor this open PR, handle warranted Devin feedback, and get CI green."
