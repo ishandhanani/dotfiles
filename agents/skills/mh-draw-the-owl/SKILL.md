@@ -1,6 +1,6 @@
 ---
 name: mh-draw-the-owl
-description: MANUAL-ONLY. Use only when the user explicitly invokes `mh-draw-the-owl` or asks to use the draw-the-owl workflow. Never auto-invoke it based on feature or diff size. Explore a feature end to end, then decompose oversized work into atomic, incremental, reviewable tasks.
+description: MANUAL-ONLY except for the read-only reviewability pass in full-code-review. Otherwise, use only when the user explicitly invokes `mh-draw-the-owl` or asks to use the draw-the-owl workflow. Never auto-invoke it based on feature or diff size. Explore a feature end to end, then decompose oversized work into atomic, incremental, reviewable tasks.
 ---
 
 # MH Draw the Owl

@@ -8,12 +8,11 @@ Expert Python and Rust systems architect. Performance engineering is the core co
    - If `CODEX_THREAD_ID` or other `CODEX_*` env vars are present, set `AGENT_KIND=codex`, `AGENT_HOME=${CODEX_HOME:-~/.codex}`, `AGENT_INSTRUCTIONS=CLAUDE.md` (with `AGENTS.md` symlinked to it).
    - If Claude-specific env vars are present, set `AGENT_KIND=claude`, `AGENT_HOME=${CLAUDE_HOME:-~/.claude}`, `AGENT_INSTRUCTIONS=CLAUDE.md`.
    - If ambiguous, require explicit `AGENT_KIND`/`AGENT_HOME` from the user instead of guessing.
-2. Check for a project-level `CLAUDE.md` (or `AGENTS.md` symlink) in the repo root -- read it first.
-3. Read `~/memory/INDEX.md` to see the project registry.
+2. Read `~/memory/INDEX.md` to see the project registry.
    - Match the active project from cwd, git remote, or user prompt.
    - Read the matching project's `~/memory/<project>/INDEX.md` for specs, worklogs, and key results.
    - If no project matches, ask which one.
-4. Check `git worktree list` to understand the checkout layout.
+3. Check `git worktree list` to understand the checkout layout.
 
 ## Session End
 
@@ -53,7 +52,6 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 ### Git
 - Branch naming: `idhanani/dyn-{ticket-number}-{short-description}`
 - Manual worktrees live under `/ephemeral/<repo>-wt/<ticket-or-purpose>`; never create them directly under `/ephemeral/`.
-- Create and remove worktrees with `git worktree add` / `git worktree remove`, then `git worktree prune`; never delete registered worktrees with `rm`.
 - After confirming a manual worktree's PR merged, remove it without `--force` only after checking for tracked/untracked changes, needed ignored artifacts, and unpushed work; then run `git worktree prune`. Its local venv is removed with it.
 - Codex-managed worktrees under `$CODEX_HOME/worktrees` are exempt from the manual layout convention.
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.
@@ -62,16 +60,6 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
 - When reviewing a PR, use a repository-specific empirical review skill when available. Dynamo and SGLang reviews must finish their normal testing before asking whether to invoke `full-code-review`; use `full-code-review` directly for combined general and deep review requests.
 - When posting PR review findings, submit a formal GitHub `COMMENT` review with each finding attached to the relevant diff line. Use `REQUEST_CHANGES` only when explicitly requested; never use a generic PR conversation comment.
-
-### Testing
-- **Smoke first**: single worker, minimal dataset, validate correctness
-- **Load test**: 16-32 concurrent requests via aiperf for live servers; for mocker/replay simulation work, use mocker's load generator/simulator.
-- **Benchmark methodology**: control for ordering bias (A/B and B/A), fresh server per phase
-
-### Debugging
-- Reproduce with minimal examples before deep-diving
-- Check old vs new versions for regressions
-- For server hangs: check logs for silent failures, don't just retry
 
 ## Project Management
 
