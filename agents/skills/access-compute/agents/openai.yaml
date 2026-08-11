@@ -1,0 +1,4 @@
+interface:
+  display_name: "Access Compute"
+  short_description: "Use private compute sources safely"
+  default_prompt: "Use $access-compute to run this branch on the appropriate private compute source."
