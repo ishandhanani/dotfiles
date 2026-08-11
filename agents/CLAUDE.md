@@ -17,22 +17,18 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 
 ## Session End
 
-When a session produces meaningful results, log to `~/memory/` before finishing. Use `/memory-log` or apply the convention directly:
-- **What to log**: benchmark results, design decisions, implementation milestones, bugs found, key findings. Not routine edits.
-- **Where**: append to the relevant worklog in `~/memory/<project>/`, or create a new file if it's a new topic.
-- **Update frontmatter**: bump `last-updated` in the project INDEX.md.
-- **Commit + push**: `cd ~/memory && git add -A && git commit -m "<project>: <short description>" && git push`. Incremental memory pushes are encouraged; push whenever memory updates are committed.
+Use the `memory-log` skill for meaningful results. Do not log routine edits.
 
 ## How I Work
 
-- **Direct path first.** Start with the narrowest viable fix that satisfies the request. Do not introduce temporary branches, helper layers, alternate implementations, or broader redesigns unless the direct path is blocked.
+- **Direct path first.** Make the smallest change that satisfies the request. Do not refactor working code or add speculative abstractions.
 - **Performance over correctness-first.** Optimize by default. Profile before guessing.
 - **Empirical validation.** Prove it with logs, metrics, benchmarks. Show numbers, not theory.
 - **No speculation.** Reproduce first, explain second. Don't theorize at length.
-- **Minimal changes.** Don't refactor what isn't broken. No speculative abstractions.
 
 ## Communication Preferences
 
+- Use the `simple-english` skill in pragmatic mode for all user-facing communication.
 - **Be concise.** Bullet points over paragraphs. Actionable items over narrative analysis. User will redirect if verbose.
 - **No hard-wrapped Markdown.** Write each paragraph and list item as one continuous line and rely on soft-wrap. Never add manual line breaks mid-paragraph to hit a column width. Newlines are only for separating paragraphs, list items, headings, code fences, and tables.
 - Explain code with flow charts/diagrams tracing through components and their interactions
@@ -66,18 +62,11 @@ When a session produces meaningful results, log to `~/memory/` before finishing.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
 - When reviewing a PR, use a repository-specific empirical review skill when available. Dynamo and SGLang reviews must finish their normal testing before asking whether to invoke `full-code-review`; use `full-code-review` directly for combined general and deep review requests.
 - When posting PR review findings, submit a formal GitHub `COMMENT` review with each finding attached to the relevant diff line. Use `REQUEST_CHANGES` only when explicitly requested; never use a generic PR conversation comment.
-- When creating or updating a PR body, use the `gh-pr-description` skill so existing descriptions are preserved and kept concise.
-- For GitHub PR comments/review feedback, use `gh-comment-ledger` first; use `github:gh-address-comments` only after the ledger exists or when explicitly requested.
 
 ### Testing
 - **Smoke first**: single worker, minimal dataset, validate correctness
 - **Load test**: 16-32 concurrent requests via aiperf for live servers; for mocker/replay simulation work, use mocker's load generator/simulator.
 - **Benchmark methodology**: control for ordering bias (A/B and B/A), fresh server per phase
-
-### Server Lifecycle
-- Clean before launch: `pkill -9 -f sglang 2>/dev/null; pkill -9 -f aiperf 2>/dev/null; sleep 3`
-- Health: `curl -s localhost:<port>/health`
-- Always kill servers after benchmarks.
 
 ### Debugging
 - Reproduce with minimal examples before deep-diving

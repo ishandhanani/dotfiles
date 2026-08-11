@@ -26,6 +26,7 @@ INJECTED_PREFIXES = (
     "<apps_instructions>",
     "<skills_instructions>",
     "<plugins_instructions>",
+    "<recommended_plugins>",
     "<subagent_notification>",
     "<local-command-caveat>",
     "<command-name>",
