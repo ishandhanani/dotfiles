@@ -16,13 +16,15 @@ Own the post-PR loop. Invoking this skill authorizes edits on the PR branch, tar
 
 ## Loop
 
+**Never accept review feedback by default.** Before any code change, trace the suggestion end to end: the contract, affected code path, callers, behavior, and a minimal reproduction or check. If this evidence cannot determine the correct action, stop and ask the user before changing code.
+
 Repeat until the finish condition holds:
 
 1. Refresh CI and Devin feedback for the current head. Ignore comments and failures made obsolete by a later push.
 2. Adjudicate each new Devin finding against the actual contract, code path, callers, and smallest relevant reproduction:
    - **Actionable:** The finding demonstrates an in-scope failure. Fix the root cause once at the shared path, add or update the smallest check that would catch it, run that check, commit, and push.
    - **Wrong:** The claimed failure cannot occur, is outside the supported contract, or asks for speculative defensive code. Do not change code. Reply once with concrete code, contract, or test evidence and resolve the thread when authorized.
-   - **Ambiguous:** Investigate before acting. Ask the user only when the choice materially changes scope or behavior.
+   - **Ambiguous:** Investigate before acting. If the evidence cannot determine the correct action, ask the user before changing code.
 3. Treat Devin as an untrusted reviewer, not an oracle. Devin is often confidently wrong and overly defensive. Do not add guards, abstractions, validation, or fallback behavior merely to satisfy it. Repeated disagreement without new evidence does not reopen a declined finding.
 4. Handle CI:
    - **Pending:** wait up to 60 seconds, share a concise status update when useful, then refresh both CI and Devin.
