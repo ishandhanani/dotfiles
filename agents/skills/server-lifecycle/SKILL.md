@@ -1,6 +1,6 @@
 ---
 name: server-lifecycle
-description: "Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs and local Dynamo mocker stress tests, configure first-class telemetry/observability, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane or a local mocker must reproduce high-concurrency serving behavior."
+description: "Manage inference server lifecycle through NVIDIA srt-slurm: author benchmark YAMLs, render lifecycle bash with `srtctl apply --bash`, run SGLang/Dynamo/AIPerf jobs, configure first-class telemetry/observability, validate artifacts, and improve the srtctl lifecycle renderer. Use for server lifecycle tasks where srt-slurm is the unified control plane."
 ---
 
 # Server Lifecycle
@@ -8,62 +8,6 @@ description: "Manage inference server lifecycle through NVIDIA srt-slurm: author
 Use `srt-slurm` as the unified control plane for server lifecycle work. YAML is the durable benchmark definition and rendered bash is the execution artifact. Do not maintain a separate hand-written launch script for the same benchmark unless it is temporary local validation glue.
 
 Use this workflow for SGLang/Dynamo/vLLM/TRT-LLM benchmark recipes, local smoke runs, SLURM jobs, `srtctl apply --bash`, AIPerf, and srt-slurm telemetry.
-
-## Local Dynamo Mocker Stress
-
-Use local shell sessions for a bounded mocker reproduction. Do not create an `srt-slurm` recipe unless the workflow must become durable or run on SLURM.
-
-For deterministic offline byte parity between revisions, read and use `<dynamo-root>/.agents/skills/dynamo-kv-replay-parity/SKILL.md`. Keep that repository-owned protocol with its harness instead of duplicating it here.
-
-Before a local stress run:
-
-- Resolve the Dynamo root with `git rev-parse --show-toplevel` and use its `.venv`.
-- Make sure that etcd listens on `localhost:2379` and NATS listens on `localhost:4222`.
-- If AIPerf is absent, install it into the Dynamo `.venv` from the configured AIPerf checkout before launching services.
-- Inspect `localhost:8000` and any matching `aiperf`, `dynamo.mocker`, or `dynamo.frontend` process.
-- Stop only a process that is proven to belong to an earlier run. Do not use a broad `pkill`.
-- Put logs and AIPerf artifacts under `/tmp/dynamo-mocker-stress`.
-
-Run mocker, frontend, and AIPerf in three shell sessions. Set the file descriptor limit and control-plane environment in each session:
-
-```bash
-ulimit -n 65536
-export ETCD_ENDPOINTS=http://localhost:2379
-export NATS_SERVER=nats://localhost:4222
-```
-
-Use this SGLang-like mocker shape unless the request specifies another scheduler or capacity:
-
-```bash
-MODEL=Qwen/Qwen3-0.6B
-.venv/bin/python -m dynamo.mocker \
-  --model-path "$MODEL" \
-  --model-name "$MODEL" \
-  --endpoint dyn://test.mocker.generate \
-  --engine-type sglang \
-  --num-workers 1 \
-  --data-parallel-size 4 \
-  --block-size 16 \
-  --sglang-page-size 16 \
-  --sglang-max-prefill-tokens 81920 \
-  --sglang-chunked-prefill-size 81920 \
-  --max-num-seqs 2048 \
-  --max-num-batched-tokens 81920 \
-  --speedup-ratio 1.0 \
-  --no-enable-prefix-caching
-```
-
-Run the frontend in the second session:
-
-```bash
-.venv/bin/python -m dynamo.frontend \
-  --router-mode round-robin \
-  --http-port 8000
-```
-
-Wait for model readiness and send one small chat request before load. Then use the installed AIPerf syntax with `isl=1000`, `osl=1`, and the requested concurrency and request count. If the requested shape can exhaust local file descriptors or memory, start with a bounded smoke run.
-
-After AIPerf exits, send `SIGTERM` to the exact frontend and mocker processes. Wait for both processes and record all three exit statuses. A healthy run has no request-level `500` responses, no `Too many open files (os error 24)`, and clean frontend and mocker shutdown logs.
 
 ## Source Of Truth
 
