@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dynamo Stress Test"
+  short_description: "Run local Dynamo mocker stress tests"
+  default_prompt: "Use $dynamo-stresstest to run the local Dynamo mocker stress workflow and report the results."
