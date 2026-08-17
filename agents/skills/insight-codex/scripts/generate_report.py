@@ -376,10 +376,6 @@ def repo_key_from_cwd(cwd: str) -> str:
     home_parts = HOME_DIR.parts
     if path == HOME_DIR:
         return "home"
-    if str(path) == "/ephemeral":
-        return "ephemeral"
-    if len(parts) >= 3 and parts[1] == "ephemeral":
-        return parts[2].lower()
     if len(parts) > len(home_parts) and parts[: len(home_parts)] == home_parts:
         return parts[len(home_parts)].lower()
     if parts:

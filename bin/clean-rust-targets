@@ -16,7 +16,11 @@ fi
 target_list=$(mktemp)
 trap 'rm -f -- "$target_list"' EXIT
 
-find /ephemeral -xdev -type d -name target -print0 2>/dev/null | while IFS= read -r -d '' target; do
+for repo in /home/ubuntu/dynamo /home/ubuntu/sglang; do
+  [[ -e "$repo/.git" ]] || continue
+  git -C "$repo" worktree list --porcelain | sed -n 's/^worktree //p'
+done | while IFS= read -r worktree; do
+  target="$worktree/target"
   if [[ -f "$target/.rustc_info.json" ]]; then
     printf '%s\0' "$target"
   fi

@@ -14,9 +14,14 @@ The upgrade is **bottom-up empirical**: spin up the canonical environment, then 
 
 | Path | Purpose |
 |------|---------|
-| `/ephemeral/dynamo` | Dynamo checkout. **Always start on `main` and pull.** |
-| `/ephemeral/sglang` | SGLang upstream checkout. **Checkout the target tag (`vX.Y.Z`).** |
+| `/home/ubuntu/dynamo` | Dynamo checkout. **Always start on `main` and pull.** |
+| `/home/ubuntu/sglang` | SGLang upstream checkout. **Checkout the target tag (`vX.Y.Z`).** |
 | `~/aiperf` | Benchmark client (rarely needed for a bump). |
+
+```bash
+DYNAMO_ROOT=/home/ubuntu/dynamo
+SGLANG_ROOT=/home/ubuntu/sglang
+```
 
 If these paths don't exist on the box, ask the user before cloning to a new location — they may have a different layout.
 
@@ -38,7 +43,7 @@ Before touching anything, confirm with the user:
 ## Step 2: Reset Dynamo to main
 
 ```bash
-cd /ephemeral/dynamo
+cd "$DYNAMO_ROOT"
 git status                         # must be clean; if not, ask the user
 git checkout main
 git pull --ff-only origin main
@@ -50,7 +55,7 @@ Refuse to proceed if the working tree is dirty — those are the user's in-progr
 ## Step 3: Checkout SGLang at Target Tag
 
 ```bash
-cd /ephemeral/sglang
+cd "$SGLANG_ROOT"
 git fetch origin --tags
 git checkout v<target-version>     # e.g. v0.5.9
 git status                         # verify detached HEAD at the tag
@@ -63,7 +68,7 @@ If the tag is missing, run `git fetch origin --tags --force` and retry. Don't si
 A fresh venv is **not optional** for this skill — old SGLang artifacts in site-packages cause confusing import-time errors that look like Dynamo bugs.
 
 ```bash
-cd /ephemeral/dynamo
+cd "$DYNAMO_ROOT"
 deactivate 2>/dev/null || true
 rm -rf .venv-sgl-<version>          # name it after the target version
 uv venv .venv-sgl-<version> --python 3.12
@@ -78,10 +83,10 @@ python -c "import sglang" 2>&1 | head -1   # expected: ModuleNotFoundError
 
 ## Step 5: Install SGLang (Local Editable)
 
-Install from the `/ephemeral/sglang` checkout, not from PyPI — this lets you grep into the live SGLang source while debugging. **Always include `[diffusion]`** — image/video/dllm launch scripts pull in `diffusers`, `imageio`, `imageio-ffmpeg`, `moviepy` etc. via that extra. Without it you'll bounce off `ModuleNotFoundError: imageio` / `diffusers` two scripts in.
+Install from the `$SGLANG_ROOT` checkout, not from PyPI — this lets you grep into the live SGLang source while debugging. **Always include `[diffusion]`** — image/video/dllm launch scripts pull in `diffusers`, `imageio`, `imageio-ffmpeg`, `moviepy` etc. via that extra. Without it you'll bounce off `ModuleNotFoundError: imageio` / `diffusers` two scripts in.
 
 ```bash
-cd /ephemeral/sglang && uv pip install -e "python[diffusion]"
+cd "$SGLANG_ROOT" && uv pip install -e "python[diffusion]"
 python -c "import sglang; print(sglang.__version__)"
 ```
 
@@ -93,8 +98,8 @@ A fresh venv has neither `maturin` nor the `nixl` Python bindings — install bo
 
 ```bash
 uv pip install maturin nixl
-cd /ephemeral/dynamo/lib/bindings/python && CARGO_TARGET_DIR=/ephemeral/dynamo/target maturin develop --uv
-cd /ephemeral/dynamo && uv pip install -e .
+cd "$DYNAMO_ROOT/lib/bindings/python" && CARGO_TARGET_DIR="$DYNAMO_ROOT/target" maturin develop --uv
+cd "$DYNAMO_ROOT" && uv pip install -e .
 ```
 
 Sanity check the rebuilt Rust exports — the `kvstats` symbol on `dynamo.prometheus_names` was missing during the 0.5.9 bump until the bindings were rebuilt:
@@ -109,7 +114,7 @@ Encode these as preflight env vars for the test session:
 
 - **CuDNN mismatch** (`SGLANG_DISABLE_CUDNN_CHECK=1`)
   PyTorch ships an older CuDNN than newer SGLang requires for Conv3d (vision/multimodal). Set this before launching `agg_vision.sh` and any multimodal script. Required for 0.5.9; still required at 0.5.11.
-- **Local model cache**: confirm `HF_HOME` / `HF_HUB_CACHE` point to a fast disk (`/ephemeral/cache` on this box) so tests don't redownload weights.
+- **Local model cache**: confirm `HF_HOME` / `HF_HUB_CACHE` point to a fast disk (for example `~/.cache/huggingface`) so tests don't redownload weights.
 - **Verify HF_TOKEN before launch.** Anonymous HF requests get 429-rate-limited fast, and gated models (`black-forest-labs/FLUX.1-dev`, anything with a license click-through) refuse outright. `hf auth whoami` must succeed; if it errors with "Invalid user token" the env's `HF_TOKEN` is stale and the user has to provide a fresh one before image_diffusion / multimodal scripts will work.
 - **Pre-download the heavy / gated models.** Letting the launch script trigger the download is fragile under HF rate limits — a half-completed download will error mid-init with a confusing 429 traceback. Pre-fetch with `hf download <repo> --token "$HF_TOKEN"` first. Big offenders: FLUX.1-dev (~25 GB, gated), LLaDA2.0-mini-preview (~35 GB), Wan2.1-T2V-1.3B-Diffusers.
 
@@ -119,7 +124,7 @@ Encode these as preflight env vars for the test session:
 - `components/src/dynamo/sglang/CLAUDE.md` — SGLang Backwards Compatibility policy and component layout.
 - `components/src/dynamo/sglang/_compat.py` — current shim. The existing fallback comments tell you what N-1 is *today*; that's the version about to age out.
 
-Path: `/ephemeral/dynamo/examples/backends/sglang/launch/`
+Path: `$DYNAMO_ROOT/examples/backends/sglang/launch/`
 
 Run them in roughly this order — simpler first, multi-modal/diffusion last:
 
@@ -147,7 +152,7 @@ For each script:
    - chat scripts: `curl -s -X POST localhost:8000/v1/chat/completions -d '{...}'`
    - embed: `/v1/embeddings`, expect dim count
    - router: confirm a `Selected worker:` line shows up in the worker log per request (kv-router decision)
-   - vision: send a `data:image/png;base64,...` URL — public image URLs (Wikimedia, raw.githubusercontent.com test fixtures) often 403 / 404. Use `/ephemeral/sglang/examples/assets/example_image.png` as the canonical inline image.
+   - vision: send a `data:image/png;base64,...` URL — public image URLs (Wikimedia, raw.githubusercontent.com test fixtures) often 403 / 404. Use `$SGLANG_ROOT/examples/assets/example_image.png` as the canonical inline image.
    - diffusion/video: check the file at the returned `file://...` URL is non-empty (~150 KB MP4 / ~200 KB PNG for the small test args)
 5. On failure, **read the full traceback before guessing** — guessing from release notes wastes more time than reading the stack. Then jump to the fix patterns below.
 6. After PASS, kill cleanly. Don't leave servers behind between scripts. The `dynamo.frontend` process is reparented to PID 1 after the bash trap fires; `pkill -f sglang` won't catch it. Always re-check `ps -ef | grep -E "sglang|dynamo|sgl_diffusion"` before next launch.
@@ -277,7 +282,7 @@ Add a row to `~/memory/INDEX.md`. Commit and push memory changes with `dynamo-up
 Before pushing: **run `uvx pre-commit run --all-files`**. The `Report pytest markers` hook walks every test file and fails if a previously-conditional `sglang.srt.*` import is now unconditional but missing from the mock list (see Step 10.7). Catching this locally is much faster than learning about it from CI.
 
 ```bash
-cd /ephemeral/dynamo
+cd "$DYNAMO_ROOT"
 uvx pre-commit run --all-files
 git push -u origin <branch>
 gh pr create --draft --title "sglang: bump to <ver>" --body "<body>"

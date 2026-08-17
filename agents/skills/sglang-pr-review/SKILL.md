@@ -48,7 +48,7 @@ Confirm: **PR number** (repo defaults to `sgl-project/sglang`), and anything the
 Live sglang checkouts on the box may be someone's active work — don't reuse or branch-switch them. Add a detached worktree from the canonical checkout:
 
 ```bash
-PR=<number>; ROOT=/ephemeral/sglang; WORK=/ephemeral/sglang-wt/pr-$PR
+PR=<number>; ROOT=/home/ubuntu/sglang; WORK="${ROOT}-wt/pr-$PR"
 mkdir -p "$(dirname "$WORK")"
 git -C "$ROOT" fetch origin "+pull/$PR/head:refs/remotes/origin/pr/$PR"
 git -C "$ROOT" worktree add --detach "$WORK" "origin/pr/$PR"
@@ -155,4 +155,4 @@ Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `IN
 
 ## Cleanup
 
-`pkill -9 -f sglang`. Ask before deleting if disk isn't tight, then run `git -C /ephemeral/sglang worktree remove /ephemeral/sglang-wt/pr-$PR && git -C /ephemeral/sglang worktree prune`.
+`pkill -9 -f sglang`. Ask before deleting if disk isn't tight, then run `git -C "$ROOT" worktree remove "$WORK" && git -C "$ROOT" worktree prune`.

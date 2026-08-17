@@ -1,16 +1,18 @@
 ---
 name: simple-english
 description: |
-  Write all user-facing communication in clear, pragmatic Simple English.
-  Also check documentation and code comments before a commit, and write pull
-  request descriptions and issue descriptions. Use strict mode only when the
-  user requests STE or ASD-STE100 compliance.
+  Use only when the user explicitly invokes `simple-english` or asks for
+  Simple English, Simplified Technical English, or ASD-STE100. Do not apply
+  it automatically to general user-facing communication, documentation, code
+  comments, pull request descriptions, or issue descriptions.
 license: MIT
 metadata:
   standard: ASD-STE100 Issue 9 (2025-01-15)
 ---
 
 # Simple English: Write Like an Aerospace Manual
+
+Manual invocation only. Do not use this skill unless the user explicitly requests it.
 
 Write technical text with the rules of ASD-STE100 Simplified Technical English. STE is the controlled language that aerospace and defense manufacturers use for maintenance documentation. The rules exist so that a tired reader who is not a native English speaker cannot misread an instruction. They remove the usual signs of AI-generated text as a side effect: long sentences, synonym rotation, hedges, filler, and decorative clauses.
 

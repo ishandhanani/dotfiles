@@ -49,7 +49,9 @@ Dynamo carries a Rust core, so reuse the canonical build tree rather than a thro
 
 ```bash
 PR=<number>
-cd /ephemeral/dynamo
+ROOT=/home/ubuntu/dynamo
+WORK="${ROOT}-wt/pr-$PR"
+cd "$ROOT"
 # STOP and ask only on *tracked* modifications/staged changes (the user's work).
 # Untracked files are fine — `gh pr checkout` ignores them.
 git status --porcelain | grep -vE '^\?\?' && echo "tracked changes present -> STOP, ask the user" || echo "no tracked changes, safe to proceed"
@@ -63,8 +65,8 @@ git log --oneline -1
 
 ```bash
 # PR branch in its own worktree + venv
-git worktree add /ephemeral/dynamo-wt/pr-$PR fork-<owner>/<branch>
-cd /ephemeral/dynamo-wt/pr-$PR
+git worktree add "$WORK" fork-<owner>/<branch>
+cd "$WORK"
 uv venv .venv --python 3.12
 source .venv/bin/activate
 # Install exact sglang version from pyproject.toml (see Step 2)
@@ -160,7 +162,7 @@ fi
 
 ```bash
 pkill -9 -f "dynamo.sglang" 2>/dev/null; pkill -9 -f "dynamo.frontend" 2>/dev/null; sleep 2
-cd /ephemeral/dynamo
+cd "$ROOT"
 ETCD_ENDPOINTS=${ETCD_ENDPOINTS:-http://127.0.0.1:2379} DYN_LOG=debug \
   bash examples/backends/sglang/launch/agg.sh --model-path Qwen/Qwen3-0.6B \
   > /tmp/dyn-agg-$PR.log 2>&1 &
@@ -318,9 +320,9 @@ cd ~/memory && git add dynamo-pr-reviews && git commit -m "dynamo-pr-reviews: ad
 
 ```bash
 pkill -9 -f "dynamo.sglang"; pkill -9 -f "dynamo.frontend"
-cd /ephemeral/dynamo && git checkout "${ORIG_REF:-main}"
+cd "$ROOT" && git checkout "${ORIG_REF:-main}"
 # Remove A/B worktrees if created:
-git worktree remove /ephemeral/dynamo-wt/pr-$PR 2>/dev/null
+git worktree remove "$WORK" 2>/dev/null
 ```
 
 If Rust was rebuilt for the PR, a `maturin develop --uv` on the restored branch puts the binding back. Leave etcd/NATS running (cheap) unless asked.

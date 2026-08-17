@@ -27,7 +27,6 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 
 ## Communication Preferences
 
-- Use the `simple-english` skill in pragmatic mode for all user-facing communication.
 - **Be concise.** Bullet points over paragraphs. Actionable items over narrative analysis. User will redirect if verbose.
 - **No hard-wrapped Markdown.** Write each paragraph and list item as one continuous line and rely on soft-wrap. Never add manual line breaks mid-paragraph to hit a column width. Newlines are only for separating paragraphs, list items, headings, code fences, and tables.
 - Explain code with flow charts/diagrams tracing through components and their interactions
@@ -39,7 +38,6 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 ## Environment
 
 - Linux with GPUs (`nvidia-smi`). You have sudo.
-- `/ephemeral/` is NVMe-backed fast storage -- prefer for build artifacts and large checkouts.
 - Before Python/build/test work, inspect `$VIRTUAL_ENV` and the active checkout's `<root>/.venv`. Use or create only `<root>/.venv`; never copy, symlink, reuse, or mutate another checkout's venv. Verify editable imports resolve inside the active checkout.
 
 ### Build Commands
@@ -51,7 +49,7 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 
 ### Git
 - Branch naming: `idhanani/dyn-{ticket-number}-{short-description}`
-- Manual worktrees live under `/ephemeral/<repo>-wt/<ticket-or-purpose>`; never create them directly under `/ephemeral/`.
+- Manual worktrees live beside their primary checkout at `/home/ubuntu/<repo>-wt/<ticket-or-purpose>`.
 - After confirming a manual worktree's PR merged, remove it without `--force` only after checking for tracked/untracked changes, needed ignored artifacts, and unpushed work; then run `git worktree prune`. Its local venv is removed with it.
 - Codex-managed worktrees under `$CODEX_HOME/worktrees` are exempt from the manual layout convention.
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.

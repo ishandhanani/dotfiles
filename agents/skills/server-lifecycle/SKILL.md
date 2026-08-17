@@ -166,6 +166,7 @@ BASE_URL="${BASE_URL:-http://localhost:8000}"
 ARTIFACT_DIR="${AIPERF_ARTIFACT_DIR:-/tmp/aiperf-smoke}"
 SERVER_LOG="${SERVER_LOG:-/tmp/server.log}"
 READY_SCRIPT="${READY_SCRIPT:-${CODEX_HOME:-$HOME/.codex}/skills/server-lifecycle/scripts/wait_for_openai_ready.py}"
+DYNAMO_ROOT="${DYNAMO_ROOT:-/home/ubuntu/dynamo}"
 SERVER_PID=""
 
 cleanup() {
@@ -182,7 +183,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-setsid /ephemeral/dynamo/examples/backends/sglang/launch/agg.sh \
+setsid "$DYNAMO_ROOT/examples/backends/sglang/launch/agg.sh" \
   --model-path "$MODEL" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
