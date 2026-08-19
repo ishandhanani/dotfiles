@@ -15,7 +15,7 @@ Produce a status update in Ishan's voice for a date range, grounded in two sourc
 ## Inputs — confirm before running
 
 1. **Date range** (`FROM`..`TO`, inclusive). If the user gives a single anchor ("last month", "since GTC"), resolve to absolute dates. Default if unspecified: **last 1 month** ending today.
-2. **Optional**: specific repos to focus/exclude; PTO/travel/cross-team context to fold into a Misc section; whether to keep `(repo#num)` citations (default: keep for drafting, the user strips them for the final paste).
+2. **Optional**: specific repos to focus/exclude; PTO/travel/cross-team context to fold into a Misc section; whether to keep `(repo#num)` citations (default: keep for drafting, the user strips them for the final paste); whether to include a full reviewed-PR appendix (default: no).
 3. **Optional running T5T doc**: if the user supplies one, read the prior tabs before drafting. An unambiguous empty final-tab title such as `May18 - June 23` can establish the date range without another question.
 
 Resolve identity once: `gh api user --jq .login` (expect `ishandhanani`). Memory lives at `$HOME/memory` (registry: `$HOME/memory/INDEX.md`; one folder per project, each with an `INDEX.md` whose frontmatter has `status` + `last-updated`).
@@ -45,15 +45,15 @@ Memory is organized by project, not repo, and misses pure-review activity. Sweep
 
 ```bash
 # Authored — created, and updated (catches ongoing/open work):
-gh search prs --author ishandhanani --created "$FROM..$TO" --limit 100 \
-  --json number,title,repository,state,createdAt,closedAt \
+gh search prs --author ishandhanani --created "$FROM..$TO" --limit 1000 \
+  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
   --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
-gh search prs --author ishandhanani --updated "$FROM..$TO" --limit 100 \
-  --json number,title,repository,state \
+gh search prs --author ishandhanani --updated "$FROM..$TO" --limit 1000 \
+  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
   --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
-# Reviewed (the "reviewed ~N PRs" talking points — strong signal, easy to forget):
-gh search prs --reviewed-by ishandhanani --updated "$FROM..$TO" --limit 100 \
-  --json number,title,repository,state \
+# Reviewed (run only when the user asks for the optional detailed appendix):
+gh search prs --reviewed-by ishandhanani --updated "$FROM..$TO" --limit 1000 \
+  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
   --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
 ```
 
@@ -90,6 +90,8 @@ Take the subagents' bullets and GitHub sweep, then write a **Mega dump** before 
 - Give each item a short first-person bullet, status tag, PR/issue links, and `mem: <project>` provenance. Combine only genuine duplicates; a merged upstream result and its related draft/POC may be one item when they are the same outcome.
 - Keep routine one-line maintenance in a compact long-tail bullet, but do not hide shipped SGLang, Dynamo, review, benchmark, or infrastructure work merely because another theme is more narrative-friendly.
 - Include a final `GitHub sweep not otherwise expanded` section for in-window PRs that were intentionally summarized, with a one-line reason for summarizing them.
+- Add a mandatory `Complete authored GitHub inventory` appendix. Deduplicate the union of authored-created and authored-updated PRs by canonical repository and number. Put every authored PR in current-state order: **Merged PRs by repository**, then **Open PRs by repository**, then **Closed without merge by repository**. Each row has repository, number, current state, title, direct GitHub link, and created/updated dates. Include every authored issue updated in the window after these PR lists.
+- Add the full `reviewed-by` PR list only when the user explicitly asks for reviewed PRs. Place this optional appendix after the complete authored inventory. Label it as a changed-in-window activity set, not a review-count metric.
 - Save it to `/tmp/t5t-mega-<FROM>_<TO>.md`. The mega dump is the audit surface; do not optimize it for brevity.
 
 ## Step 5 — Recommend a T5T from the mega dump
