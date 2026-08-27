@@ -1,6 +1,6 @@
 ---
 name: pr-babysitter
-description: Babysit an open pull request until its current head has green CI and all substantive AI review feedback is handled. Treat every AI-authored comment, including Devin's, as an adversarial claim that must be independently disproved or reproduced before responding or changing code; make and push warranted fixes, reply with evidence when feedback is wrong, and retry failed CI jobs when safe.
+description: Monitor a pull request until CI passes and substantive AI feedback is resolved.
 ---
 
 # PR Babysitter

@@ -1,6 +1,6 @@
 ---
 name: dynamo-pr-reviews
-description: Clone/checkout an ai-dynamo/dynamo PR, build it (maturin + editable Python), bring up etcd/NATS, run the end-to-end aggregated server via the repo's examples/backends/sglang/launch/agg.sh, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review a Dynamo PR (e.g. "test ai-dynamo/dynamo#10254", "review this dynamo PR").
+description: Empirically review a Dynamo pull request by building, running, and load-testing it.
 ---
 
 # Dynamo PR Review

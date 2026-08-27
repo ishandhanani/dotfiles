@@ -1,6 +1,6 @@
 ---
 name: phone-a-friend
-description: Ask Claude, Cursor, or Devin through ACP for parallel independent verification, design adjudication, or explicitly authorized delegated action. Use for second opinions, cross-model checks, fast parallel workers, persistent multi-turn friend sessions, or a subagent that must drive another agent across turns while the caller retains ownership.
+description: Use Claude, Cursor, or Devin through ACP for independent checks or explicitly delegated work.
 ---
 
 # Phone a Friend

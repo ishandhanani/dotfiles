@@ -1,6 +1,6 @@
 ---
 name: sglang-pr-review
-description: Check out an SGLang PR in a throwaway worktree, build it in a fresh venv, run it with sglang.launch_server, drive load with uvx aiperf, verify the change empirically, then post a scoped evidence-backed GitHub review. Use when asked to test/try/review an sglang PR (e.g. "test sgl-project/sglang#12345", "review this sglang PR").
+description: Empirically review an SGLang pull request by building, running, and load-testing it.
 ---
 
 # SGLang PR Review

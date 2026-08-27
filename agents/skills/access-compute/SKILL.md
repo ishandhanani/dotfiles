@@ -1,6 +1,6 @@
 ---
 name: access-compute
-description: Use when the user asks to access a compute source, run local work on a remote GPU machine, use a direct SSH development box, choose between direct compute and a Teleport cluster, or move a branch to remote compute for a Dynamo or SGLang build and run. Reads the private compute registry before any connection attempt and creates an isolated remote session.
+description: Access GPU compute over direct SSH or Teleport. Use for remote builds, runs, or access routing.
 ---
 
 # Access Compute

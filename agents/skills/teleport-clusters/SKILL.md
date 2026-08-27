@@ -1,6 +1,6 @@
 ---
 name: teleport-clusters
-description: Use when the user asks to access, inventory, troubleshoot, or refresh authentication for a Teleport-managed Kubernetes or SLURM cluster. Reads the private compute registry and source note before it runs tsh, kubectl, SSH, or SLURM commands.
+description: Access or troubleshoot a Teleport-managed Kubernetes or SLURM cluster.
 ---
 
 # Teleport Clusters

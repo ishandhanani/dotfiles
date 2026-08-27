@@ -89,7 +89,7 @@ PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
         "insight_report_work",
         "Codex insight/report analysis",
         re.compile(
-            r"insight-codex|usage-data|analysis-input|synthesis\.json|"
+            r"usage-data|analysis-input|synthesis\.json|"
             r"generate_report|insights?",
             re.IGNORECASE,
         ),

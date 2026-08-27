@@ -1,6 +1,6 @@
 ---
 name: gh-pr-description
-description: Create or update GitHub pull request descriptions without deleting existing content or adding long narrative slop. Use when the user asks to write, refresh, clean up, standardize, or update a PR body/description for a current branch or GitHub PR.
+description: Write or update a concise GitHub PR description without overwriting useful content.
 ---
 
 # GH PR Description

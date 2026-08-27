@@ -1,6 +1,6 @@
 ---
 name: dynamo-sglang-bump
-description: Bump Dynamo's SGLang backend to a new SGLang version. Sets up a clean dynamo main checkout, target SGLang tag, fresh venv, then walks every launch script and fixes API breakage as it surfaces. Use when the user asks to upgrade/bump SGLang in Dynamo (e.g. "update dynamo for sglang 0.5.X").
+description: Upgrade Dynamo's SGLang version and resolve compatibility breakage.
 user-invocable: true
 ---
 

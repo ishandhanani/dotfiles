@@ -1,6 +1,6 @@
 ---
 name: gh-comment-ledger
-description: "First-pass workflow for GitHub PR comments and review threads: pull feedback into a simple actionable markdown table before deciding what to fix. Use before github:gh-address-comments when the user asks to review, triage, address, fix, summarize, classify, ledger, or selectively handle PR comments/review feedback."
+description: Triage GitHub PR feedback into an actionable ledger before editing or replying.
 ---
 
 # GH Comment Ledger

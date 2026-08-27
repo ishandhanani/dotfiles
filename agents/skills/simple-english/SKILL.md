@@ -1,10 +1,6 @@
 ---
 name: simple-english
-description: |
-  Use only when the user explicitly invokes `simple-english` or asks for
-  Simple English, Simplified Technical English, or ASD-STE100. Do not apply
-  it automatically to general user-facing communication, documentation, code
-  comments, pull request descriptions, or issue descriptions.
+description: Write or audit text in Simple English or ASD-STE100. Run only when explicitly requested.
 license: MIT
 metadata:
   standard: ASD-STE100 Issue 9 (2025-01-15)

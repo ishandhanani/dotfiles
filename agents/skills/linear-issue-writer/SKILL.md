@@ -1,6 +1,6 @@
 ---
 name: linear-issue-writer
-description: Structure and draft Linear issue bodies, updates, and comments with strict anti-slop rules. Use when the user wants to write a Linear issue/update/comment or decide the shape of one; do not use for general Linear lookup, status checks, project browsing, or routine reads.
+description: Draft concise Linear issues, updates, and comments. Do not use for routine Linear reads.
 ---
 
 # Linear Issue Writer

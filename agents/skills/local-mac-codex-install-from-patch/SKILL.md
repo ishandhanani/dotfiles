@@ -1,6 +1,6 @@
 ---
 name: local-mac-codex-install-from-patch
-description: "MANUAL-ONLY. Build a Codex fork/branch from source on Apple Silicon macOS and install it as both the CLI (~/.local/bin/codex) and the desktop app (/Applications/Codex.app) by swapping the app's embedded binary and re-signing the bundle. ONLY run when the user explicitly types /local-mac-codex-install-from-patch. NEVER auto-invoke this skill, never select it for a model-initiated task, never run it as a side effect of any other request."
+description: Install a patched Codex CLI and desktop app on Apple Silicon. Run only when explicitly invoked.
 user-invocable: true
 ---
 

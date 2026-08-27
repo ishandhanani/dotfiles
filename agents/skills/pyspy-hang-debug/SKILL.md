@@ -1,6 +1,6 @@
 ---
 name: pyspy-hang-debug
-description: Diagnose hung or stalled Python processes using py-spy. Captures live Python and native (C/C++) stack traces from one or more PIDs without restarting the process — works for local processes, processes inside containers, and processes inside SLURM jobs. Use when a Python process has stopped emitting output but is still alive, when distributed workers appear deadlocked, or when you need to attribute a stall to NCCL / mutexes / pure Python work for an upstream bug report.
+description: Diagnose a live, stalled Python process with py-spy, including container and SLURM workloads.
 user-invocable: true
 ---
 

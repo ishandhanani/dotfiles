@@ -1,6 +1,6 @@
 ---
 name: deep-code-review
-description: Run a deep, adversarial code review focused on correctness, hot-path performance, maintainability, abstraction quality, and codebase health. Use when the user asks for deep-code-review, a deep or overall code review, a thermo-nuclear or thermonuclear review, a code-judo review, a strict performance review, or an especially harsh maintainability audit. Do not use for ordinary bug-focused review unless the user asks for this stricter rubric.
+description: Perform an adversarial review of correctness, performance, and maintainability. Use for deep or strict code reviews.
 ---
 
 # Deep Code Review

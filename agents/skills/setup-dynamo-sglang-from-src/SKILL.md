@@ -1,6 +1,6 @@
 ---
 name: setup-dynamo-sglang-from-src
-description: Build and run NVIDIA Dynamo with an editable SGLang backend from exact source checkouts. Use after access-compute creates an isolated session, or when the user supplies dedicated Dynamo and SGLang roots on a GPU host.
+description: Build Dynamo with an editable SGLang checkout on a GPU host.
 ---
 
 # Set Up Dynamo and SGLang From Source

@@ -1,6 +1,6 @@
 ---
 name: full-code-review
-description: Run general-review, deep-code-review, and an mh-draw-the-owl reviewability pass as one consolidated review. Use when the user asks for a full code review, a combined general and deep review, or a comprehensive review of code, a diff, branch, or pull request.
+description: Perform a comprehensive code review with general and deep review passes.
 ---
 
 # Full Code Review
@@ -11,12 +11,11 @@ Establish this bar before invoking any child skill: include a finding only when 
 
 For example, “A zero-length batch reaches this division and returns 500” is a finding. “A future caller might pass an undocumented shape” is not one without an in-scope caller or contract. Skip speculative edge cases, style preferences, unsupported inputs, and alternative designs; do not recommend defensive code solely for them. Retain findings about trust-boundary validation, data safety, or security.
 
-Run all three existing skills against the same target:
+Run both existing skills against the same target:
 
 1. Read and follow `../general-review/SKILL.md` completely, applying the finding threshold above.
 2. Read and follow `../deep-code-review/SKILL.md` completely, applying the finding threshold above.
-3. Read and follow `../mh-draw-the-owl/SKILL.md` completely as a read-only reviewability pass. Measure the handwritten diff and recommend decomposition when it exceeds the skill's threshold. Do not modify the target.
-4. Use the same scope and evidence for all three reviews.
-5. Verify and deduplicate their findings, then return one severity-ordered report.
+3. Use the same scope and evidence for both reviews.
+4. Verify and deduplicate their findings, then return one severity-ordered report.
 
 This sets the admission bar for the consolidated report; do not copy, weaken, or replace any child skill's rubric.

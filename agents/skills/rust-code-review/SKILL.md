@@ -1,6 +1,6 @@
 ---
 name: rust-code-review
-description: Review Rust code changes with exacting systems-level standards for error handling, tracing discipline, unnecessary clones, async and concurrency correctness, log levels, and minimal diff surface. Use when reviewing Rust changes or performance-critical, concurrent, networking, or FFI paths that need a strict senior-engineer review.
+description: Review Rust changes for correctness, performance, concurrency, and maintainability.
 ---
 
 # Rust Code Review

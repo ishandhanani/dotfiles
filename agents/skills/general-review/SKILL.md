@@ -1,6 +1,6 @@
 ---
 name: general-review
-description: Review any requested artifact for material concerns, likely regressions, ambiguity, unnecessary complexity, and performance overhead. Use whenever the user asks for a review of anything, including a conversation, plan, design, implementation, patch, diff, pull request, document, or scoped code surface.
+description: Review a design, document, or code change for material correctness, scope, and performance issues.
 ---
 
 # General Review

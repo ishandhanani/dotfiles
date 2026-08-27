@@ -1,6 +1,6 @@
 ---
 name: t5t-gen
-description: Generate a bi-weekly/monthly engineering status update ("T5T") for a date range by mining the ~/memory work-vault and cross-referencing GitHub PR activity via gh. First emit a full evidence-backed mega dump of active work, then a separately labeled recommended T5T for approval. Use when asked to "write my T5T", "status update", "what did I do from X to Y", "biweekly update", "T5T mega dump", or "T5T for approval".
+description: Create an evidence-backed engineering status update from ~/memory and GitHub activity.
 ---
 
 # T5T Generator

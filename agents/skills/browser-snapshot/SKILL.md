@@ -1,6 +1,6 @@
 ---
 name: browser-snapshot
-description: Capture real browser UI screenshots and visual evidence for webpages, local web apps, dashboards, Perfetto traces, and other browser-rendered artifacts. Use when the user asks to use the browser, inspect a visual UI state, verify layout/rendering, produce screenshots, or attach browser/Perfetto snapshots as evidence.
+description: Capture browser screenshots to verify a webpage, dashboard, Perfetto trace, or local UI.
 ---
 
 # Browser Snapshot

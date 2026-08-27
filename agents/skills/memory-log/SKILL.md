@@ -1,6 +1,6 @@
 ---
 name: memory-log
-description: Log a milestone, finding, or result to ~/memory/. Invoke explicitly with /memory-log or proactively when a session produces something worth remembering.
+description: Record significant results and decisions in ~/memory for future sessions.
 user-invocable: true
 ---
 

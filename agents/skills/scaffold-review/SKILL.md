@@ -1,6 +1,6 @@
 ---
 name: scaffold-review
-description: Analyze conversation history, find gaps and drift in AGENTS/CLAUDE instructions and skills, propose and apply targeted improvements.
+description: Review agent-session history for stale or missing instructions and skill workflows.
 ---
 
 # Scaffold Review
