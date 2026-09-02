@@ -77,6 +77,7 @@ case "$OS:$ARCH:$USERNAME" in
     linux:*:ubuntu)            FLAKE_TARGET="brev-vm" ;;
     linux:*:nvidia)            FLAKE_TARGET="brev-vm-gpu" ;;
     linux:*:ishan)             FLAKE_TARGET="simbox" ;;
+    linux:*:idhanani)          FLAKE_TARGET="work-desktop" ;;
     *)
         print_error "No flake target known for $OS/$ARCH/$USERNAME. Edit install.sh or flake.nix."
         exit 1

@@ -67,6 +67,15 @@
           };
         };
         
+        "work-desktop" = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${linuxSystem};
+          modules = [ ./home.nix ];  # Use the same file with conditionals
+          extraSpecialArgs = {
+            user = "idhanani";
+            homeDirectory = "/home/idhanani";
+          };
+        };
+
         "brev-vm-arm" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages."aarch64-linux";
           modules = [ ./home.nix ];  # Use the same file with conditionals
