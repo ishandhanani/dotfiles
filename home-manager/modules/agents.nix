@@ -55,7 +55,11 @@
       echo "📦 Installing Codex from Aphoh/codex..."
 
       asset_suffix="linux-x86-64"
-      tags_output=$(git ls-remote --tags --sort=-v:refname https://github.com/Aphoh/codex 'refs/tags/enforce-us-v*')
+      tags_output=$(curl -fsSL "https://api.github.com/repos/Aphoh/codex/tags?per_page=100" \
+        | ${pkgs.jq}/bin/jq -r '.[].name' \
+        | grep '^enforce-us-v' \
+        | sort -rV \
+        | while IFS= read -r tag; do printf '\t%s\n' "refs/tags/$tag"; done)
 
       if [ -z "$tags_output" ]; then
         echo "❌ No Codex releases found"
