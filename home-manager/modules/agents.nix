@@ -59,7 +59,7 @@
         | ${pkgs.jq}/bin/jq -r '.[].name' \
         | grep '^enforce-us-v' \
         | sort -rV \
-        | while IFS= read -r tag; do printf '\t%s\n' "refs/tags/$tag"; done)
+        | while IFS= read -r tag; do printf -- '-\t%s\n' "refs/tags/$tag"; done)
 
       if [ -z "$tags_output" ]; then
         echo "❌ No Codex releases found"
