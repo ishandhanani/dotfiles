@@ -64,3 +64,7 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 - **Linear** for ticket tracking (check if MCP tools are available)
 - Large features: spec in Linear first, then break into tickets
 - Small tasks: jump straight to implementation
+
+## URL fetching
+
+When asked to fetch a URL, use the `Bash` tool to run `curl -sL <URL>` and summarize the response. Do not use the `WebFetch` tool.

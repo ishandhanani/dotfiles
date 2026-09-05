@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Mac Claude Bypass Permissions"
+  short_description: "Install a global PreToolUse hook that bypasses Claude Code permission prompts, with ssh/scp/sftp/rsync rewrite support."
+  default_prompt: "Run /local-mac-claude-bypass-permissions to install the permission bypass hook and wrappers."
