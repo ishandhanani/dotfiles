@@ -12,7 +12,8 @@ Use this skill as the entry point for compute work. Keep all source names, alias
 1. Read `~/memory/compute/INDEX.md`.
 2. Resolve the user's source name through the aliases in that registry.
 3. Read the linked source note before any DNS, SSH, `tsh`, Kubernetes, or SLURM probe.
-4. Use the access type and command from the source note.
+4. Check the source's tags and restrictions (Tailscale, Teleport, VPN, office network, shared account, restricted QoS, cgroup caps, etc.) and satisfy them before connecting.
+5. Use the access type and command from the source note.
 
 Do not search old project notes for an endpoint when the active source note exists. Do not retry a retired endpoint.
 
