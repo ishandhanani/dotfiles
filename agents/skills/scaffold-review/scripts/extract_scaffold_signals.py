@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -37,6 +38,8 @@ INJECTED_PREFIXES = (
 )
 TEXT_BLOCK_TYPES = {"text", "input_text", "output_text"}
 SUBAGENT_TOOL_NAMES = {"spawn_agent", "wait_agent", "send_input", "close_agent", "resume_agent"}
+SKILL_PATH_RE = re.compile(r"(?:^|/)skills/([^/\s]+)/(?:SKILL\.md)$")
+JS_IDENTIFIER_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 
 CORRECTION_RE = re.compile(
     r"\b("
@@ -386,6 +389,133 @@ def bounded(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
     return items[:limit]
 
 
+def js_tokens(source: str) -> list[tuple[str, str]]:
+    """Lex literal wrapper inputs without evaluating session code.
+
+    Dynamic templates/expressions remain unknown. Comments and quoted examples
+    are opaque, so text that merely mentions tools.exec_command is not a call.
+    """
+    tokens: list[tuple[str, str]] = []
+    i = 0
+    while i < len(source):
+        if source[i].isspace():
+            i += 1
+            continue
+        if source.startswith("//", i):
+            end = source.find("\n", i)
+            i = len(source) if end < 0 else end + 1
+            continue
+        if source.startswith("/*", i):
+            end = source.find("*/", i + 2)
+            i = len(source) if end < 0 else end + 2
+            continue
+        char = source[i]
+        if char in "\"'`":
+            start = i
+            i += 1
+            while i < len(source):
+                if source[i] == "\\":
+                    i += 2
+                elif source[i] == char:
+                    i += 1
+                    break
+                else:
+                    i += 1
+            raw = source[start:i]
+            try:
+                if char == '`':
+                    # Escape semantics and substitutions need a JS parser.
+                    if not raw.endswith('`') or '${' in raw or '\\' in raw:
+                        raise ValueError("dynamic template")
+                    value = raw[1:-1]
+                elif char == '"':
+                    value = json.loads(raw)
+                else:
+                    value = ast.literal_eval(raw)
+                tokens.append(("string", value))
+            except (ValueError, SyntaxError):
+                tokens.append(("unknown", raw))
+            continue
+        match = JS_IDENTIFIER_RE.match(source, i)
+        if match:
+            value = match.group()
+            tokens.append(("identifier", value))
+            i += len(value)
+        else:
+            tokens.append(("punctuation", char))
+            i += 1
+    return tokens
+
+
+def wrapped_shell_calls(source: str) -> list[str | None]:
+    """Return static shell-command candidates; None means unknown arguments.
+
+    This recognizes tools.exec_command({...})/tools.Bash({...}) with a literal
+    cmd/command property. It does not assert that a conditional call executed.
+    """
+    tokens = js_tokens(source)
+    calls: list[str | None] = []
+    for i in range(len(tokens) - 4):
+        if [value for _, value in tokens[i:i + 2]] != ["tools", "."]:
+            continue
+        name = tokens[i + 2][1]
+        if not (name.endswith("exec_command") or name == "Bash") or tokens[i + 3][1] != "(":
+            continue
+        command = None
+        if tokens[i + 4][1] == "{":
+            depth = 1
+            j = i + 5
+            ambiguous = False
+            while j < len(tokens) and depth:
+                kind, value = tokens[j]
+                if kind == "punctuation" and value in "{[":
+                    depth += 1
+                elif kind == "punctuation" and value in "}]":
+                    depth -= 1
+                if depth == 1 and value in {"cmd", "command"} and j + 3 < len(tokens):
+                    colon, literal, after = tokens[j + 1:j + 4]
+                    if colon[1] == ":" and literal[0] == "string" and after[1] in {",", "}"}:
+                        if command is not None:
+                            ambiguous = True
+                        command = literal[1]
+                    else:
+                        ambiguous = True
+                # Spreads can replace cmd, including after its literal value.
+                if depth == 1 and [t[1] for t in tokens[j:j + 3]] == [".", ".", "."]:
+                    ambiguous = True
+                j += 1
+            if ambiguous or depth:
+                command = None
+        calls.append(command)
+    return calls
+
+
+def skill_reads(cmd: str) -> set[str]:
+    """Explicit cat/sed/head/tail read candidates, not arbitrary path mentions."""
+    try:
+        lexer = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return set()
+    reads: set[str] = set()
+    reader = False
+    command_start = True
+    for token in tokens:
+        if token and all(c in ";&|()\n" for c in token):
+            reader = False
+            command_start = True
+        elif command_start:
+            if re.match(r"[A-Za-z_][A-Za-z0-9_]*=", token):
+                continue
+            reader = Path(token).name in {"cat", "sed", "head", "tail", "less"}
+            command_start = False
+        elif reader and (match := SKILL_PATH_RE.search(token)):
+            reads.add(match.group(1))
+    return reads
+
+
 def stability(count: int) -> str:
     if count >= 5:
         return "crystallized"
@@ -407,6 +537,9 @@ def analyze_file(path: Path) -> dict[str, Any]:
     command_counts: Counter[str] = Counter()
     file_counts: Counter[str] = Counter()
     skill_mentions: Counter[str] = Counter()
+    read_attempts: list[dict[str, Any]] = []
+    pending_reads: dict[str, list[dict[str, Any]]] = {}
+    coverage: Counter[str] = Counter()
     corrections: list[dict[str, Any]] = []
     subagent_notifications = 0
 
@@ -433,29 +566,52 @@ def analyze_file(path: Path) -> dict[str, Any]:
                 }
             )
 
-    def record_tool(name: str, input_obj: Any, raw_text: str, count_patch_paths: bool = True) -> None:
+    def record_command(cmd: str, origin: str, call_id: str, line_number: int) -> None:
+        command_lines.append(cmd)
+        prefix = command_prefix(cmd)
+        if prefix:
+            command_counts[prefix] += 1
+        record_paths(cmd, file_counts)
+        for skill in sorted(skill_reads(cmd)):
+            row = {"skill": skill, "line": line_number, "origin": origin, "outcome": "unverified"}
+            read_attempts.append(row)
+            if origin == "direct" and call_id:
+                pending_reads.setdefault(call_id, []).append(row)
+
+    def record_tool(name: str, input_obj: Any, raw_text: str, count_patch_paths: bool = True,
+                    call_id: str = "", line_number: int = 0) -> None:
         tool_counts[name] += 1
         tool_text_snippets.append(f"{name} {raw_text[:2000]}")
         if name in SUBAGENT_TOOL_NAMES:
             return
-        if name.endswith("exec_command") or name == "exec_command" or name == "Bash":
+        if name.rsplit(".", 1)[-1] == "exec":
+            coverage["wrapper_calls"] += 1
+            candidates = wrapped_shell_calls(raw_text)
+            if not candidates:
+                coverage["wrappers_without_recognized_shell_calls"] += 1
+            for cmd in candidates:
+                if cmd is None:
+                    coverage["unknown_shell_arguments"] += 1
+                else:
+                    coverage["literal_wrapped_shell_candidates"] += 1
+                    record_command(cmd, "wrapped_candidate", "", line_number)
+        elif name.endswith("exec_command") or name == "Bash":
             if isinstance(input_obj, dict):
                 cmd = str(input_obj.get("cmd") or input_obj.get("command") or "")
             else:
                 cmd = ""
             if cmd:
-                command_lines.append(cmd)
-                prefix = command_prefix(cmd)
-                if prefix:
-                    command_counts[prefix] += 1
-                record_paths(cmd, file_counts)
+                coverage["direct_shell_calls"] += 1
+                record_command(cmd, "direct", call_id, line_number)
+            else:
+                coverage["unknown_shell_arguments"] += 1
         elif count_patch_paths and (name.endswith("apply_patch") or name == "apply_patch"):
             record_patch_paths(raw_text, file_counts)
         elif name in {"Edit", "MultiEdit", "Write", "NotebookEdit"}:
             record_file_input(input_obj, file_counts)
 
     with path.open(errors="ignore") as handle:
-        for line in handle:
+        for line_number, line in enumerate(handle, 1):
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError:
@@ -487,7 +643,8 @@ def analyze_file(path: Path) -> dict[str, Any]:
                         continue
                     name = str(block.get("name") or "")
                     input_obj = block.get("input")
-                    record_tool(name, input_obj, stringify_arguments(input_obj))
+                    record_tool(name, input_obj, stringify_arguments(input_obj),
+                                call_id=str(block.get("id") or ""), line_number=line_number)
                 continue
 
             if obj_type != "response_item":
@@ -496,6 +653,20 @@ def analyze_file(path: Path) -> dict[str, Any]:
             if not isinstance(payload, dict):
                 continue
             payload_type = payload.get("type")
+
+            if payload_type == "function_call_output":
+                rows = pending_reads.get(str(payload.get("call_id") or ""), [])
+                output = parse_args_payload(payload.get("output"))
+                exit_code = output.get("exit_code")
+                for row in rows:
+                    if isinstance(exit_code, int) and exit_code != 0:
+                        row["outcome"] = "call_failed"
+                    elif exit_code == 0 and re.search(
+                        rf"(?m)^name:\s*[\"']?{re.escape(row['skill'])}[\"']?\s*$",
+                        str(output.get("output") or ""),
+                    ):
+                        row["outcome"] = "content_observed"
+                continue
 
             if payload_type == "message":
                 role = payload.get("role")
@@ -507,7 +678,8 @@ def analyze_file(path: Path) -> dict[str, Any]:
             if payload_type == "custom_tool_call":
                 name = str(payload.get("name") or "")
                 raw_text = str(payload.get("input") or "")
-                record_tool(name, {}, raw_text, count_patch_paths=False)
+                record_tool(name, {}, raw_text, count_patch_paths=False,
+                            call_id=str(payload.get("call_id") or ""), line_number=line_number)
                 continue
 
             if payload_type != "function_call":
@@ -516,10 +688,15 @@ def analyze_file(path: Path) -> dict[str, Any]:
             raw_arguments = payload.get("arguments")
             arguments = parse_args_payload(raw_arguments)
             arg_text = stringify_arguments(raw_arguments)
-            record_tool(name, arguments, arg_text)
+            record_tool(name, arguments, arg_text,
+                        call_id=str(payload.get("call_id") or ""), line_number=line_number)
 
     joined = "\n".join(all_real_text + command_lines + tool_text_snippets)
     patterns = [name for name, _, regex in PATTERNS if regex.search(joined)]
+    pattern_evidence = {}
+    for name, _, regex in PATTERNS:
+        if match := regex.search(joined):
+            pattern_evidence[name] = " ".join(joined[max(0, match.start() - 60):match.end() + 100].split())
     preamble = [turn["text"][:220] for turn in real_user_turns[:3]]
     return {
         "session": sid,
@@ -531,7 +708,10 @@ def analyze_file(path: Path) -> dict[str, Any]:
         "command_counts": dict(command_counts),
         "file_counts": dict(file_counts),
         "skill_mentions": dict(skill_mentions),
+        "skill_read_attempts": read_attempts,
+        "coverage": dict(coverage),
         "patterns": patterns,
+        "pattern_evidence": pattern_evidence,
         "preamble": preamble,
         "subagent_notifications": subagent_notifications,
     }
@@ -547,6 +727,11 @@ def aggregate(files: list[Path], max_corrections: int) -> dict[str, Any]:
     command_counts: Counter[str] = Counter()
     file_counts: Counter[str] = Counter()
     skill_mentions: Counter[str] = Counter()
+    read_counts: Counter[str] = Counter()
+    observed_counts: Counter[str] = Counter()
+    read_sessions: dict[str, set[str]] = defaultdict(set)
+    coverage: Counter[str] = Counter()
+    read_evidence: list[dict[str, Any]] = []
     tool_sessions: dict[str, set[str]] = defaultdict(set)
     pattern_sessions: dict[str, set[str]] = defaultdict(set)
     pattern_examples: dict[str, list[str]] = defaultdict(list)
@@ -563,6 +748,13 @@ def aggregate(files: list[Path], max_corrections: int) -> dict[str, Any]:
         command_counts.update(session["command_counts"])
         file_counts.update(session["file_counts"])
         skill_mentions.update(session["skill_mentions"])
+        coverage.update(session["coverage"])
+        for read in session["skill_read_attempts"]:
+            read_counts[read["skill"]] += 1
+            read_sessions[read["skill"]].add(sid)
+            if read["outcome"] == "content_observed":
+                observed_counts[read["skill"]] += 1
+            read_evidence.append({"session": sid, **read})
         corrections.extend(session["corrections"])
         if session["preamble"]:
             preambles.append({"session": sid, "turns": session["preamble"]})
@@ -570,8 +762,8 @@ def aggregate(files: list[Path], max_corrections: int) -> dict[str, Any]:
             tool_sessions[tool].add(sid)
         for pattern in session["patterns"]:
             pattern_sessions[pattern].add(sid)
-            if len(pattern_examples[pattern]) < 3 and session["preamble"]:
-                pattern_examples[pattern].append(f"{sid}: {session['preamble'][0][:160]}")
+            if len(pattern_examples[pattern]) < 3:
+                pattern_examples[pattern].append(f"{sid}: {session['pattern_evidence'][pattern]}")
 
     corrections.sort(key=lambda row: (row["score"], row["session"], row["turn"]), reverse=True)
     pattern_descriptions = {name: desc for name, desc, _ in PATTERNS}
@@ -613,6 +805,22 @@ def aggregate(files: list[Path], max_corrections: int) -> dict[str, Any]:
         "top_commands": counter_rows(command_counts, 20),
         "top_files": counter_rows(file_counts, 25),
         "skill_mentions": counter_rows(skill_mentions, 20),
+        "skill_read_attempts": [
+            {**row, "sessions": len(read_sessions[row["name"]]),
+             "content_observed": observed_counts[row["name"]]}
+            for row in counter_rows(read_counts, 50)
+        ],
+        "skill_read_evidence": read_evidence[:200],
+        "coverage": dict(coverage),
+        "evidence_limits": [
+            "skill_mentions counts user text only; read attempts are separate.",
+            "Wrapped commands are static candidates, not proof of execution; dynamic inputs are unknown.",
+            "content_observed requires a direct successful shell result containing the skill name frontmatter.",
+            "call_failed describes the shell call, not necessarily every read within it.",
+            "Pattern examples are matching input excerpts, not proof of workflow completion or user intent.",
+            "Sessions are selected by file modification time; turns may predate the requested window.",
+            "No observation in this sample does not establish disuse.",
+        ],
         "workflow_patterns": patterns,
         "candidate_scaffold_gaps": candidate_gaps,
         "recent_preambles": preambles[:12],
@@ -633,6 +841,14 @@ def markdown(report: dict[str, Any]) -> str:
     for row in report["correction_candidates"][:20]:
         text = row["text"].replace("|", "\\|")
         lines.append(f"- `{row['session']}` turn {row['turn']} score={row['score']}: {text}")
+
+    lines.extend(["", "## Coverage"])
+    for key, count in report["coverage"].items():
+        lines.append(f"- `{key}`: {count}")
+    lines.extend(f"- {limit}" for limit in report["evidence_limits"])
+    lines.extend(["", "## Skill Read Attempts"])
+    for row in report["skill_read_attempts"]:
+        lines.append(f"- `{row['name']}`: {row['count']} candidates in {row['sessions']} sessions; content observed {row['content_observed']}")
 
     lines.extend(["", "## Workflow Patterns"])
     for row in report["workflow_patterns"]:
