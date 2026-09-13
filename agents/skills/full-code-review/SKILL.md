@@ -5,17 +5,11 @@ description: Perform a comprehensive code review with general and deep review pa
 
 # Full Code Review
 
-## Finding threshold — set before every pass
+Perform both general and deep review perspectives on the same explicit target. Set one admission bar first: every finding needs a supported trigger, affected path, and material correctness, safety, performance, or maintainability consequence. Do not recommend defensive code solely for undocumented hypothetical inputs.
 
-Establish this bar before invoking any child skill: include a finding only when it gives a concrete, in-scope failure case — precondition/input, affected code path, and outcome (wrong behavior, crash, data loss, security-boundary violation, or measurable regression). Prefer a reproduction; otherwise trace the path and show why its precondition is supported.
+1. Use the compact [general review entrypoint](../general-review/SKILL.md) for scope, semantic/concurrency/recovery coverage, and candidate validation.
+2. Use the compact [deep review entrypoint](../deep-code-review/SKILL.md) for cross-boundary failure, hot-path cost, and structural simplification.
+3. Load their detailed references only for relevant surfaces. Reuse evidence and completed checks; the second perspective need not repeat identical work or require an external agent.
+4. Independently verify and deduplicate candidates, then return one severity-ordered report with exact locations and validation limits.
 
-For example, “A zero-length batch reaches this division and returns 500” is a finding. “A future caller might pass an undocumented shape” is not one without an in-scope caller or contract. Skip speculative edge cases, style preferences, unsupported inputs, and alternative designs; do not recommend defensive code solely for them. Retain findings about trust-boundary validation, data safety, or security.
-
-Run both existing skills against the same target:
-
-1. Read and follow `../general-review/SKILL.md` completely, applying the finding threshold above.
-2. Read and follow `../deep-code-review/SKILL.md` completely, applying the finding threshold above.
-3. Use the same scope and evidence for both reviews.
-4. Verify and deduplicate their findings, then return one severity-ordered report.
-
-This sets the admission bar for the consolidated report; do not copy, weaken, or replace any child skill's rubric.
+An explicit exhaustive review keeps the requested depth. File length and cosmetic preferences alone are not defects. Stop when the requested surfaces and material candidates have been checked.

@@ -5,7 +5,7 @@ description: Review Rust changes for correctness, performance, concurrency, and 
 
 # Rust Code Review
 
-Review recently modified Rust code with strict systems and performance standards. Apply the rules below rigorously.
+Review recently modified Rust code with strict systems and performance standards. Use the repository's conventions and apply the relevant systems rules below. A finding needs a supported trigger, affected path, and material consequence; stylistic preferences alone are not defects.
 
 ## Core Review Philosophy
 
@@ -25,17 +25,17 @@ Use a direct, concise, technically grounded tone. Avoid filler praise. Keep most
 Unless explicitly told otherwise, review only recently written or modified code. Use `git diff`, `git log`, or ask for the specific files or PR if unclear.
 
 1. Identify the review target with `git status`, `git diff --stat`, and `git diff`.
-2. Make multiple passes over the code using every rubric below. Keep finding issues and style comments until no more remain.
+2. Inspect relevant rules below and verify candidate findings. Stop when the changed surfaces and material candidates have been checked.
 3. Write the review:
    - Prefer concrete `file:line` findings over general advice.
-   - Group issues by severity and include style comments.
+   - Group material findings by severity; include style feedback only when explicitly requested.
 
 ## Review Rules
 
 Apply these rules on each pass over the changed code.
 
 1. **No `unwrap()` / `expect()` in production code.** If unavoidable, explain why it cannot fail.
-2. **Use the `tracing` crate, never `log`.** The interfaces differ subtly. Delete `use tracing as log;` because it is confusing.
+2. **Follow the repository's logging stack.** Where it uses `tracing`, preserve structured events and span semantics; do not migrate another project from `log` as a review side effect.
 3. **Use structured tracing fields, not formatted strings.** `tracing::error!(error = %e, component_name, "Unable to register service for discovery")` is better than `error!("Unable to register service for discovery: {}", e)`. Use `%` for `Display` and `?` for `Debug`.
 4. **Use the right log level.** Reserve `info!` for events end users need to see. Use `debug!` for routine internal events. Use `trace!` or remove logs from hot paths. Logging is relatively expensive because it takes a lock on the output channel.
 5. **Do not add `Arc<Mutex<…>>` reflexively.** Avoid synchronization when work is not concurrent. Using both `Arc` and `Box` rarely makes sense because both are pointers; require a comment when both are necessary. Let owners decide synchronization rather than pre-wrapping shared state in a constructor.
@@ -53,8 +53,8 @@ Apply these rules on each pass over the changed code.
 
 - Delete comments that repeat the code or function name.
 - Do not put history in comments; use `git`.
-- Treat AI-generated comments as a smell. Ask the author to remove verbose or obvious comments and make the remainder more useful.
-- Treat AI-generated tests as a smell. Prefer the three most important behavioral tests over long lists that enumerate inputs.
+- Question comments that obscure invariants or contradict behavior; authorship alone is not evidence of a problem.
+- Prefer behavioral tests that distinguish correct and incorrect outcomes; do not infer quality from authorship or enforce a fixed test count.
 - Keep `///` documentation and `//` internal comments distinct.
 - Keep copyright headers to the two required SPDX lines; trim anything beyond that.
 
@@ -74,9 +74,9 @@ Apply these rules on each pass over the changed code.
 ## Tests
 
 - Prioritize behavior coverage over line coverage. Confirm that new logic is exercised, not merely touched.
-- Be skeptical of long lists of similar test cases, especially generated ones. Push for the three most important tests.
+- Be skeptical of long lists of similar test cases, especially generated ones. Prefer the smallest cases that cover distinct behavioral risks.
 - Ensure tests are discoverable by the repository's CI configuration. Flag missing required markers, tags, or registration.
 
 ## Second Pass Checklist
 
-Before finalizing, make one focused pass over every changed hunk for the review rules, comment hygiene, concurrency and async patterns, naming, and tests. Report all findings.
+Before finalizing, verify unresolved candidates and coverage of the relevant changed paths. Do not repeat completed checks without new evidence. Report all material findings in scope.

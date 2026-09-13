@@ -1,18 +1,18 @@
 ---
 name: linear-issue-writer
-description: Draft concise Linear issues, updates, and comments. Do not use for routine Linear reads.
+description: Create, update, or draft concise Linear issues and requested comments. Do not use for routine reads.
 ---
 
 # Linear Issue Writer
 
-Use this skill to avoid issue sprawl and bloated ticket bodies when writing Linear content. It does not replace `linear:linear` for ordinary Linear reads, lookup, status checks, or project management.
+Use this skill to avoid issue sprawl and bloated ticket bodies when writing Linear content. Ordinary reads and lookups use the available Linear tools directly.
 
-Default to one issue, draft first, and write to Linear only after explicit user approval.
+Default to one issue. A request to create or update an issue authorizes that write within the requested scope. A draft or review request produces a draft. Posting a comment requires an explicit request to communicate on the issue. Skill selection alone grants no write authorization.
 
 ## Workflow
 
 1. Gather context.
-   - Read the user request and any linked issue, PR, doc, memory note, or code reference.
+   - Read the user request and the linked evidence needed for its scope.
    - If Linear tools are available, search/list nearby existing issues before proposing a new one.
    - If the target team/project/status is unclear, ask only for the missing field needed to write the issue.
 2. Run the collapse pass.
@@ -22,9 +22,10 @@ Default to one issue, draft first, and write to Linear only after explicit user 
 3. Draft the issue or update.
    - Show the collapse decision and the draft body.
    - Keep one issue by default; use checkboxes inside `Done When` for subwork.
-4. Ask for approval.
-   - Do not call Linear create/update/comment tools until the user approves the draft.
-   - After approval, create/update/comment exactly what was approved.
+4. Complete the requested action.
+   - For an authorized write, create or update the requested content and read back the result.
+   - For a draft-only request, return the draft without writing.
+   - Ask only for a missing required field or an unresolved scope decision. Reuse authorization already given.
 5. Report the result.
    - Return the issue key/link, what changed, and any fields left unset.
 
@@ -77,11 +78,11 @@ Split avoided: <what would have become extra issues, if any>
 
 ## Linear Writes
 
-- For `create new`, create one issue with the approved title/body/team/project/status/labels.
-- For `update existing`, update only the approved fields; prefer appending a concise comment when changing the body would obscure history.
-- For `comment on existing`, write a status or scope comment using the approved draft.
-- If approval changes the scope, revise the draft and ask again.
+- For `create new`, create one issue with the requested title/body and resolved team/project/status/labels.
+- For `update existing`, update only the requested fields and preserve useful history. Do not substitute a posted comment for a body edit without authorization to communicate.
+- For `comment on existing`, post the requested status or scope comment within its authorized content.
+- If the user changes the scope, incorporate it within the new authorization. Ask only if a material decision remains unresolved.
 
 ## Fallback
 
-If Linear tools are unavailable, produce the approved draft only and say that Linear write tools are not connected.
+If Linear tools are unavailable, produce the complete local draft and report that the requested external write remains blocked by the missing connection.

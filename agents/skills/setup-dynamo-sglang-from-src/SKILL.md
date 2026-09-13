@@ -36,7 +36,7 @@ command -v etcd
 command -v nvcc
 ```
 
-Stop if a checkout is dirty or a commit does not match the requested SHA. Report missing host prerequisites. Do not install host packages, CUDA, NATS, or etcd without user approval.
+If a shared checkout is dirty or does not match the requested SHA, preserve it and create an isolated checkout at the requested commit. Reuse an existing task-owned checkout only when its changes belong to this task. Report missing host prerequisites; provision them when the user already authorized provisioning, otherwise ask only about the missing host-level change.
 
 ## Prepare the Build Shell
 
@@ -52,7 +52,8 @@ Create one virtual environment owned by the Dynamo session checkout:
 
 ```bash
 cd "$DYNAMO_ROOT"
-uv venv .venv
+test -L .venv && { echo '.venv must be checkout-local' >&2; exit 1; }
+test -x .venv/bin/python || uv venv .venv
 source .venv/bin/activate
 uv pip install "maturin[patchelf]"
 ```

@@ -12,7 +12,7 @@ Produce a status update in Ishan's voice for a date range, grounded in two sourc
 
 **Principle: memory tells the story, gh proves it shipped.** Neither alone is enough. Memory without gh misses merge state and review-marathon counts; gh without memory misses entire workstreams (uncommitted POCs, design pivots, benchmark results that never became a PR) and all the *why*.
 
-## Inputs — confirm before running
+## Inputs
 
 1. **Date range** (`FROM`..`TO`, inclusive). If the user gives a single anchor ("last month", "since GTC"), resolve to absolute dates. Default if unspecified: **last 1 month** ending today.
 2. **Optional**: specific repos to focus/exclude; PTO/travel/cross-team context to fold into a Misc section; whether to keep `(repo#num)` citations (default: keep for drafting, the user strips them for the final paste); whether to include a full reviewed-PR appendix (default: no).
@@ -20,54 +20,9 @@ Produce a status update in Ishan's voice for a date range, grounded in two sourc
 
 Resolve identity once: `gh api user --jq .login` (expect `ishandhanani`). Memory lives at `$HOME/memory` (registry: `$HOME/memory/INDEX.md`; one folder per project, each with an `INDEX.md` whose frontmatter has `status` + `last-updated`).
 
-## Step 1 — Memory-first discovery (what was actually worked on)
+## Evidence discovery
 
-The memory registry + a window-scoped git log are the authoritative "what did I do" list. Run from `$HOME/memory`:
-
-```bash
-cd "$HOME/memory"
-# Projects with commit activity in the window, ranked by effort (commit volume is a rough proxy):
-git log --since=$FROM --until=$TO --name-only --pretty=format: | grep -v '^$' \
-  | sed 's#/.*##' | sort | uniq -c | sort -rn
-```
-
-Then read `$HOME/memory/INDEX.md` (the registry table: status, repo, last-active, one-line description per project) and intersect:
-- Include projects with **in-window commits** AND/OR a `last-updated` inside the window.
-- The registry's one-line descriptions are nearly status-ready bullets — use them to scope, then read each active project's own `INDEX.md` for the numbers and PR mappings.
-
-**Dates gate inclusion.** A project last active before `FROM` does NOT belong in the update even if its PRs are famous (e.g. the async-openai migration was March work — memory's dates correctly exclude it from a May–June report). Trust memory's dates over your sense of "recent".
-
-Do NOT crawl per-commit logs of high-volume projects (some have 1000+ commits in a window) — read the curated `INDEX.md` / summary files instead.
-
-## Step 2 — gh augmentation (confirm state, catch repos memory didn't name)
-
-Memory is organized by project, not repo, and misses pure-review activity. Sweep GitHub across ALL repos for the window:
-
-```bash
-# Authored — created, and updated (catches ongoing/open work):
-gh search prs --author ishandhanani --created "$FROM..$TO" --limit 1000 \
-  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
-  --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
-gh search prs --author ishandhanani --updated "$FROM..$TO" --limit 1000 \
-  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
-  --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
-# Reviewed (run only when the user asks for the optional detailed appendix):
-gh search prs --reviewed-by ishandhanani --updated "$FROM..$TO" --limit 1000 \
-  --json number,title,repository,state,createdAt,closedAt,updatedAt,url \
-  --jq '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title)"' | sort -u
-```
-
-This auto-discovers repos memory won't name (in past runs: brev-cli, Aphoh/codex, warnold-tachometer, fork PRs). Per-PR detail when a bullet needs it:
-
-```bash
-gh pr view <num> -R <owner/repo> --json number,title,body,state,mergedAt,closedAt,author,reviews,comments \
-  --jq '{num:.number,title:.title,state:.state,merged:.mergedAt,author:.author.login,
-         nComments:(.comments|length),nReviews:(.reviews|length),body:.body}'
-```
-
-For a flagship "after N comments" line, also count review comments: `gh api repos/<owner>/<repo>/pulls/<num>/comments --jq 'length'` and add `nReviews`. Fork/private PRs may 404 — note and skip.
-
-Before clustering, collect the canonical public PRs/issues/RFCs named by each active memory project. Do not limit candidates to PRs returned by the authored sweep: the best framing artifact may be a collaborator-owned RFC or a public follow-up linked only from memory.
+Read [discovery.md](references/discovery.md) for the date-scoped memory and GitHub sweep.
 
 ## Step 3 — Fan out subagents over the period's active workstreams
 
@@ -142,13 +97,7 @@ Always write both artifacts: `/tmp/t5t-mega-<FROM>_<TO>.md` and `/tmp/t5t-<FROM>
 
 ### Running-document mode
 
-When the user provides a running Google Doc and asks for it to be filled:
-
-1. Use the Google Docs skill and connector; read the full tab list and the preceding 2–3 updates before writing.
-2. Treat the live document as the strongest voice/template reference: preserve its plain date line, bold section labels, bullets, link style, and approximate density.
-3. If the user asks for a mega dump, review, or approval, keep the document read-only. Produce both local artifacts first and wait for explicit approval before creating or replacing a tab.
-4. Otherwise, write only the requested empty/latest tab from the recommended T5T, then verify the tab id, content, bullet structure, bold labels, and links through connector readback.
-5. If the user later cleans up the draft, compare the edited tab with the generated file. Treat deletions as stronger feedback than wording tweaks, then update selection and voice rules accordingly.
+When the user supplies a running Google Doc, read [running-document.md](references/running-document.md) and the relevant document skill. Otherwise produce the local artifacts.
 
 ## Voice guide (match Ishan's T5T style)
 

@@ -26,7 +26,9 @@ Do not search old project notes for an endpoint when the active source note exis
 
 ## Publish Local Work
 
-Before the remote connection, identify the local repository, branch, commit, canonical remote, and dirty state.
+For an inventory or authentication request, stop after resolving access; no repository publication is needed. For a build or run, record the requested repository and exact commit. If that commit is already available from the canonical remote, fetch it directly on the selected source. A PR review must not publish an unrelated local HEAD or commit the canonical checkout's dirty work.
+
+Only when the requested run needs local changes, identify the local repository, branch, commit, canonical remote, and dirty state:
 
 ```bash
 git status --short
@@ -37,13 +39,13 @@ git remote -v
 
 If the requested work is dirty, create one focused commit that contains only that work. Preserve unrelated changes.
 
-Push the exact commit to a named branch on the canonical remote. Record the branch and full commit SHA.
+When branch publication is within the user's authorized scope, push the exact task commit to a named branch on the canonical remote. Otherwise transfer a Git bundle. Record the branch or bundle and full commit SHA.
 
 ```bash
 git push origin HEAD:<branch>
 ```
 
-Use a Git bundle only when the user does not permit a remote push. Do not copy a working tree with `rsync` or `scp`.
+Do not copy a working tree with `rsync` or `scp`; preserve exact Git identity with a remote fetch or bundle.
 
 ## Start a Direct Session
 
@@ -71,7 +73,7 @@ Create one session root under the parent path from the source note. Use a UTC ti
 └── artifacts/
 ```
 
-Fetch the pushed branch from the canonical remote. Check out the recorded commit SHA in the session repository. Do not build from a moving branch head.
+Fetch the requested existing ref, authorized published branch, or task bundle. Check out the recorded commit SHA in the session repository. Do not build from a moving branch head.
 
 Keep all checkouts, virtual environments, build targets, logs, and output inside this session root. Do not mutate another session's checkout or virtual environment.
 

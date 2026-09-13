@@ -5,154 +5,22 @@ description: Empirically review an SGLang pull request by building, running, and
 
 # SGLang PR Review
 
-Empirical, end-to-end workflow for testing an SGLang PR and leaving a scoped, evidence-backed review.
+Empirically review the requested SGLang PR at its exact head. A finding needs a supported trigger, affected path, and material outcome; prefer a reproduction or a direct code trace. Skip speculative defensive code and style preferences while retaining security and data-safety findings.
 
-**Principle: read the diff to form hypotheses, then prove or refute them by running the code.** Never review from the diff alone — launch the server, exercise the changed path, show the logs/metrics/numbers.
+## Scope and validation
 
-## Review threshold — protect simplicity
+- A review alone does not authorize modifying the author's branch or posting to GitHub. Local build adjustments are isolated, recorded, and excluded from the reviewed patch. If the user also requests fixes or publication, complete that authorized scope.
+- Use `access-compute` and the requested source's current note. Pick the smallest model/topology that exercises the change; do not stop at a hard-coded GPU limit when an appropriate source is available.
+- Use a detached worktree at the PR head and its own `.venv`. Preserve existing source trees and unrelated work.
+- Docs-only reviews need relevant documentation checks; isolated logic needs targeted tests; serving/kernel changes need representative execution. Performance claims need controlled A/B with exact baseline and head SHAs.
+- Separate warmup and measurement. Repeat when needed to characterize variance or investigate a failure, and report intermittent failures with their occurrence counts.
 
-Treat the PR's stated contract as its scope. Do not convert every imaginable edge case into a finding. A finding needs a concrete failure case: state the precondition and request/configuration, the changed path, and the user-visible or operational outcome (wrong output, crash, data loss, security boundary violation, or measurable regression). Prefer a reproduction; otherwise show the direct path and why the precondition is in scope.
+## Procedures
 
-For example: “With cache eviction enabled and one full page, this counter decrements twice, so the next allocation sees negative free pages” is a finding. “An undocumented caller might someday pass a partial cache object” is not one without an in-scope caller or contract. Do not add defensive branches for that speculation.
+- For checkout and A/B identity, use the exact-checkout section of [the shared serving reference](../dynamo-pr-reviews/references/serving.md). Set `REPO=sgl-project/sglang`; use the actual PR base branch and `git merge-base`, never assume the previous commit is the baseline.
+- For a pure SGLang install and launch, read [serving.md](references/serving.md).
+- For an authorized GitHub review or requested pending review, use [the review publication procedure](../dynamo-pr-reviews/references/github-review.md).
 
-Every edge case adds complexity. Recommend the smallest fix only when the demonstrated impact earns it. Skip style preferences, hypothetical compatibility, unsupported inputs, and alternative designs. Never dismiss trust-boundary validation, data safety, or security findings.
+Finish with severity-ordered findings, exact commits, representative test/traffic evidence, environment, and coverage limitations. After normal empirical testing, offer `full-code-review` if it was not requested already; report the completed empirical result before that optional decision.
 
-Main path is pure SGLang: `python -m sglang.launch_server`. Almost everything (kernels, schedulers, cache, sampling, metrics, the OpenAI API) can be exercised this way — no external serving layer needed.
-
-## Boundaries — read-only on the PR
-
-This skill **tests and reviews**; it never changes the PR. The PR author owns every code change.
-
-- **Never** commit/push to the PR branch or the author's fork, never force-push, never apply suggestions or `gh pr` mutations (no edit, no commit-to-branch, no merge/close). You are a reviewer, not a committer.
-- Any local edits needed to get the build/test running are **throwaway** — discarded at cleanup, never pushed anywhere.
-- The **only** outbound action is leaving a review *comment* (findings + evidence), and **only after the user explicitly approves sharing it**. Default to producing the review locally and prompting the user to share.
-- If you find a fix, **describe it in the review** for the author to apply — do not apply it for them.
-
-## Hardware fit — check first
-
-Default target: **2× L40S** (~46 GB each, 92 GB total; Ada sm_89; PCIe, no NVLink; no fp4).
-
-After reading the PR, decide whether it can be tested here. **Stop and tell the user** if the change fundamentally needs hardware/scale beyond 2× L40S, e.g.:
-- A model that won't fit in 92 GB even quantized (≳70B dense, large MoE).
-- Hardware the L40S lacks: Blackwell fp4/nvfp4, Hopper-only fp8-groupwise / DeepGEMM / TMA paths, NVLink/NVLS collectives, multi-node EP.
-- A TP/PP/EP topology needing >2 GPUs.
-
-Otherwise you can almost always test the change with a **small model on 1 GPU** (default `Qwen/Qwen3-0.6B`) — the model is just a vehicle for hitting the changed code. Pick the smallest model that still exercises the path (an MoE-specific change needs a small MoE; only use it if it fits, else flag it).
-
-## Step 0 — Inputs
-
-Confirm: **PR number** (repo defaults to `sgl-project/sglang`), and anything the PR needs to be exercised (a specific model, flag, or traffic shape). If the PR description says how to enable/observe the feature, follow it.
-
-## Step 1 — Throwaway checkout (never touch existing sglang trees)
-
-Live sglang checkouts on the box may be someone's active work — don't reuse or branch-switch them. Add a detached worktree from the canonical checkout:
-
-```bash
-PR=<number>; ROOT=/home/ubuntu/sglang; WORK="${ROOT}-wt/pr-$PR"
-mkdir -p "$(dirname "$WORK")"
-git -C "$ROOT" fetch origin "+pull/$PR/head:refs/remotes/origin/pr/$PR"
-git -C "$ROOT" worktree add --detach "$WORK" "origin/pr/$PR"
-git -C "$WORK" log --oneline -1
-```
-
-PR branches are often based on an older `main` and show as CONFLICTING — that's fine, test the branch as the author has it.
-
-Read the diff and plan:
-```bash
-gh pr diff $PR | tee /tmp/pr-$PR.diff
-gh pr diff $PR --name-only
-```
-List changed files, write down concrete expectations (what should change in logs / metrics / output / perf), and **grep for consumers the diff may have missed** — e.g. if a function signature or a NamedTuple's fields changed, `git grep` every call/unpack site; an un-updated one is a real bug.
-
-## Step 2 — Fresh venv + editable install
-
-Per-PR isolated venv. uv pulls prebuilt wheels for torch / sgl-kernel / flashinfer (no compilation; the uv cache makes repeats fast):
-
-```bash
-cd $WORK
-uv venv .venv && source .venv/bin/activate
-uv pip install -e "python"
-python -c "import sglang; print(sglang.__version__, sglang.__file__)"
-```
-If a native dep (`sgl-kernel`, flashinfer) won't resolve for the PR's base, tell the user rather than fighting the toolchain — the branch may target newer CUDA/kernels than the box has.
-
-## Step 3 — Launch the server (background)
-
-`launch_server` serves an OpenAI-compatible API (default port 30000) with `/v1/...`, `/health`, `/metrics`.
-
-```bash
-pkill -9 -f sglang 2>/dev/null; sleep 2
-python -m sglang.launch_server \
-  --model-path Qwen/Qwen3-0.6B --port 30000 --enable-metrics \
-  <flags-the-PR-needs>          # e.g. --log-level debug, feature-specific flags
-  > /tmp/sglang-pr-$PR.log 2>&1 &
-```
-
-Run it as a background task and poll readiness — bail on failure signatures instead of waiting blind:
-```bash
-until curl -sf localhost:30000/health >/dev/null; do
-  grep -qiE "Traceback|CUDA out of memory|Error|Killed" /tmp/sglang-pr-$PR.log && { tail -30 /tmp/sglang-pr-$PR.log; break; }
-  sleep 3
-done
-```
-- DEBUG logs: just pass `--log-level debug` (read directly here).
-- To force a specific path, shape the inputs: small `--max-total-tokens` to force cache eviction/load-back; a shared prefix to force prefix-cache hits; long prompts for chunked prefill; etc.
-
-## Step 4 — Load test with aiperf
-
-```bash
-uvx aiperf profile \
-  --model Qwen/Qwen3-0.6B \
-  --url http://localhost:30000 \
-  --endpoint-type chat --streaming \
-  --concurrency 16 --num-requests 256 \
-  --prompt-input-tokens-mean 512 --output-tokens-mean 128 \
-  --num-warmup-requests 8
-```
-Useful knobs:
-- Prefix/cache-hit testing: `--num-prefix-prompts` + `--prefix-prompt-length` (shared prefixes drive cache hits).
-- A/B a perf claim: run the same load on the PR branch and on its merge-base (`git checkout HEAD~1`, reinstall, relaunch), compare aiperf throughput / TTFT / ITL. Control ordering (A/B and B/A), fresh server per phase.
-
-## Step 5 — Analyze
-
-For each hypothesis from Step 1, pull evidence:
-- **Logs** — grep for the lines the PR adds/changes, and for any new WARN/ERROR (a feature that floods warnings under its own happy path is a finding).
-- **Metrics** — `curl -s localhost:30000/metrics | grep <new-series>`; check values are sane and self-consistent (e.g. a separate counter vs a histogram's `_sum`/`_count`).
-- **Perf** — compare aiperf summaries (branch vs base).
-- **Correctness** — spot-check the PR's claimed invariants and closely coupled behavior (e.g. off-by-one, double counting, or unconditional cost contradicting an "only when enabled" claim). Do not expand into unrelated or unsupported edge cases.
-
-Keep the concrete numbers / log lines — they go into the review verbatim. For every finding, also capture its failure case: trigger, affected path, and observed outcome.
-
-Only after testing and analysis are complete, ask the user whether to invoke `full-code-review` on the PR. Do not invoke it automatically.
-
-## Step 6 — Report, then post the review (on approval)
-
-Summarize to the user first: what works (with evidence), what's broken/risky (`file:line` + evidence + severity), and a recommendation. **Do not post to GitHub until the user approves.**
-
-Once approved, leave a **scoped, evidence-backed review** — one `COMMENT`-type review with inline comments at exact lines, not a wall of text. Build the payload and post via the API:
-
-```bash
-# /tmp/review-$PR.json:
-# { "commit_id": "<git rev-parse HEAD of PR branch>", "event": "COMMENT",
-#   "body": "<summary + evidence (server logs / /metrics / aiperf numbers)>",
-#   "comments": [ {"path": "...", "line": <N>, "side": "RIGHT", "body": "<finding + proof snippet>"}, ... ] }
-gh api --method POST repos/sgl-project/sglang/pulls/$PR/reviews --input /tmp/review-$PR.json
-```
-- Each `line` must be a line present in the diff (RIGHT side). One inline comment per finding, anchored at the line, with the captured log/metric snippet and `Failure case: <trigger> → <outcome>` that proves it.
-- Default to `event: "COMMENT"` — only Approve / Request-changes if the user asks for a verdict.
-- Evidence in comments stays plain SGLang output. Be concrete and kind.
-
-## Step 7 — Persist the review to memory
-
-File the review under the `sglang-pr-reviews` umbrella project in `~/memory` (one subfolder per PR — keeps these out of the memory root):
-
-```bash
-DIR=~/memory/sglang-pr-reviews/$PR-<slug>      # e.g. 26976-tiered-cached-token
-mkdir -p "$DIR"
-# write $DIR/review.md: PR + branch, test setup, evidence (logs/metrics/aiperf), findings, posted-review link, verdict
-```
-Then register the row in `~/memory/sglang-pr-reviews/INDEX.md` (not the root `INDEX.md`), `python3 ~/memory/scripts/lint_memory.py` (lints the whole repo and exits 0 even with findings — only act on ones naming your files), and commit **only your files** (never `git add -A` in `~/memory` — it sweeps the user's concurrent work): `cd ~/memory && git add sglang-pr-reviews && git commit -m "sglang-pr-reviews: add #$PR review" && git push`.
-
-## Cleanup
-
-`pkill -9 -f sglang`. Ask before deleting if disk isn't tight, then run `git -C "$ROOT" worktree remove "$WORK" && git -C "$ROOT" worktree prune`.
+Stop only recorded task-owned processes or scheduler jobs and verify cleanup. Retain needed evidence and follow the shared worktree-retention policy. Use `memory-log` under `sglang-pr-reviews/<PR>-<slug>/` and update that umbrella index, staging only exact task paths.

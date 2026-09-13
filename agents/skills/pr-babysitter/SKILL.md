@@ -5,21 +5,11 @@ description: Monitor a pull request until CI passes and substantive AI feedback 
 
 # PR Babysitter
 
-Own the post-PR loop. Invoking this skill authorizes edits on the PR branch, targeted tests, commits, pushes, evidence-backed replies to AI reviewers, thread resolution, and safe CI retries. It does not authorize merging, closing, force-pushing, or changing unrelated code.
+Own the requested post-PR loop. A user request to babysit a PR authorizes relevant edits, targeted tests, commits, pushes, and safe CI retries. Post replies and resolve threads only when those GitHub actions are explicitly authorized. Automatic skill selection grants no additional authorization. It does not authorize merging, closing, force-pushing, or changing unrelated code.
 
 ## Background Delegation
 
-If the user explicitly requests a background task and the Codex task tools are available, split the work as follows. Otherwise, run the loop in this task.
-
-- **Controller:** Keep the task where the user requested babysitting as the controller. It creates tasks and reports their state. It does not adjudicate feedback or change the PR.
-- **Escalator:** Create a local Codex task with `model: gpt-5.6-terra` and `thinking: xhigh`. It performs the initial pass and every later state-change pass. It alone can make PR judgments, edit files, reply to AI reviewers, resolve threads, retry CI, commit, or push.
-- **Monitor:** If the escalator finds pending CI or a stable state that still needs watching, create a local Codex task with `model: gpt-5.6-luna` and `thinking: low`. The monitor is read-only. It records the head SHA, required-check state, and unresolved non-outdated AI-review thread IDs. It waits up to 60 seconds between refreshes and sends the controller a result only when one of those values changes. Do not report unchanged polls.
-
-Pass the controller thread ID and host ID to the monitor. On a state change, the monitor must use `send_message_to_thread` to send a compact record to the controller, then stop. It must not write GitHub, modify files, retry CI, or recommend an action.
-
-Pass the same controller target to the escalator. The escalator must send the controller one compact result when the PR is ready or when it needs user input. After each push or non-terminal state change, it starts the next monitor before it exits. The controller starts a new `gpt-5.6-terra` task at `xhigh` for each monitor result that needs action.
-
-Use a state record with the PR URL, head SHA, event, changed check or thread IDs, and failed-run URL when available. Events are `head_changed`, `ci_failed`, `ci_green`, `ai_review_changed`, `ready`, or `needs_user`.
+When background execution is requested, read [background.md](references/background.md). Otherwise own the loop in this task.
 
 ## Start
 
@@ -65,7 +55,7 @@ Finish only when all of these apply to the current head:
 
 - All required CI checks are green.
 - No unresolved, non-outdated AI-review thread contains a demonstrated actionable failure.
-- Every declined AI finding has one evidence-backed reply when GitHub writes are authorized.
+- Every declined AI finding has one evidence-backed reply when replies are authorized; otherwise return its reply draft locally.
 - No AI check or review for the current head is still pending.
 
 An AI reviewer's approval is not required when its remaining objections are demonstrably wrong. Report the PR as ready; do not merge it unless the user separately asks.
