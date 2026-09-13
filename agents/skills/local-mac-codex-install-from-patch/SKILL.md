@@ -22,7 +22,7 @@ Ask the user for (or infer from their message):
 - Apple Silicon (`uname -m` = `arm64`), macOS, Rust toolchain installed (`cargo`, `rustc`).
 - CLI lives at `~/.local/bin/codex` (a standalone Mach-O, not an npm wrapper). Adjust if `which codex` differs.
 - Desktop app at `/Applications/Codex.app`, an Electron app whose CLI is embedded at `Contents/Resources/codex` and launched as `codex app-server`.
-- A scratch build dir at `~/codex-fork-build` (holds the checkout, `build.log`, `backups/`, `resign-app.sh`).
+- A fresh build directory for each installation. Preserve prior build directories because they can contain restore backups; record the selected path in the handoff.
 
 ## Procedure
 
@@ -38,25 +38,26 @@ Confirm the fork version is the SAME generation as the bundled CLI (e.g. fork 0.
 
 ### 1. Build from source
 ```
-cd ~ && rm -rf codex-fork-build
-git clone --depth 1 --branch <TAG> https://github.com/<OWNER>/<REPO>.git codex-fork-build
-cd codex-fork-build/codex-rs
+BUILD_DIR=$(mktemp -d "$HOME/codex-fork-build.XXXXXX")
+git clone --depth 1 --branch <TAG> https://github.com/<OWNER>/<REPO>.git "$BUILD_DIR/source"
+cd "$BUILD_DIR/source/codex-rs"
 git rev-parse HEAD                                                   # sanity: matches release commit
-CARGO_TERM_COLOR=never cargo build --release --bin codex > ~/codex-fork-build/build.log 2>&1
+CARGO_TERM_COLOR=never cargo build --release --bin codex > "$BUILD_DIR/build.log" 2>&1
 ```
 The `codex` binary comes from the `codex-cli` crate (`cli/Cargo.toml` has `[[bin]] name = "codex"`). Run the build in the **background** — it pulls forked git deps (crossterm/ratatui/tungstenite) and takes ~15-25 min. Output: `codex-rs/target/release/codex`. Verify `--version`.
 
 ### 2. Install the CLI
 ```
-BIN=~/codex-fork-build/codex-rs/target/release/codex
-cp -p ~/.local/bin/codex ~/.local/bin/codex.bak-<OLDVER>            # backup once
+BIN="$BUILD_DIR/source/codex-rs/target/release/codex"
+mkdir -p "$BUILD_DIR/backups"
+cp -p ~/.local/bin/codex "$BUILD_DIR/backups/cli-original"
 cp "$BIN" ~/.local/bin/codex && chmod +x ~/.local/bin/codex
 codesign --force --sign - ~/.local/bin/codex                        # ad-hoc; arm64 needs a valid sig
 ~/.local/bin/codex --version
 ```
 
 ### 3. Patch the desktop app
-Quit it first (ASK the user — it interrupts any live desktop session):
+Quit it only when that interruption is authorized; otherwise prepare the binary and backup plan, then ask because quitting interrupts live desktop sessions:
 ```
 osascript -e 'tell application "Codex" to quit'
 # wait for exit; force-kill only if it hangs
@@ -64,8 +65,8 @@ osascript -e 'tell application "Codex" to quit'
 Swap the embedded binary and move the backup OUT of the bundle (so it isn't sealed in):
 ```
 RES=/Applications/Codex.app/Contents/Resources/codex
-mkdir -p ~/codex-fork-build/backups
-cp -p "$RES" ~/codex-fork-build/backups/codex.bak-<BUNDLEDVER>
+mkdir -p "$BUILD_DIR/backups"
+cp -p "$RES" "$BUILD_DIR/backups"/codex.bak-<BUNDLEDVER>
 cp "$BIN" "$RES" && chmod +x "$RES"
 ```
 
@@ -100,8 +101,10 @@ Success = main process stable + a `Resources/codex app-server` child + renderer/
 - **Auto-update reverts it**: Sparkle (app) or a CLI reinstall overwrites these with official builds. Re-run build + `resign-app.sh` after any update.
 
 ## Restore originals
+
+Set `BUILD_DIR` to the recorded installation directory containing the matching backups. Do not guess or delete earlier directories.
 ```
-cp ~/.local/bin/codex.bak-<OLDVER> ~/.local/bin/codex
-cp ~/codex-fork-build/backups/codex.bak-<BUNDLEDVER> /Applications/Codex.app/Contents/Resources/codex
+cp "$BUILD_DIR/backups/cli-original" ~/.local/bin/codex
+cp "$BUILD_DIR/backups"/codex.bak-<BUNDLEDVER> /Applications/Codex.app/Contents/Resources/codex
 # then reinstall the app (clean signature) or re-run resign-app.sh
 ```

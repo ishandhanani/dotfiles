@@ -4,15 +4,9 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 
 ## Session Start
 
-1. Resolve agent identity:
-   - If `CODEX_THREAD_ID` or other `CODEX_*` env vars are present, set `AGENT_KIND=codex`, `AGENT_HOME=${CODEX_HOME:-~/.codex}`, `AGENT_INSTRUCTIONS=CLAUDE.md` (with `AGENTS.md` symlinked to it).
-   - If Claude-specific env vars are present, set `AGENT_KIND=claude`, `AGENT_HOME=${CLAUDE_HOME:-~/.claude}`, `AGENT_INSTRUCTIONS=CLAUDE.md`.
-   - If ambiguous, require explicit `AGENT_KIND`/`AGENT_HOME` from the user instead of guessing.
-2. Read `~/memory/INDEX.md` to see the project registry.
-   - Match the active project from cwd, git remote, or user prompt.
-   - Read the matching project's `~/memory/<project>/INDEX.md` for specs, worklogs, and key results.
-   - If no project matches, ask which one.
-3. Check `git worktree list` to understand the checkout layout.
+- For work that depends on prior results, resolve the project from cwd, git remote, or the request and read its `~/memory/<project>/INDEX.md`. Use `~/memory/INDEX.md` when the project is unknown. Read linked evidence only as the task needs it; an unregistered project does not block ordinary work.
+- Inspect `git worktree list` before branch operations or when checkout identity matters.
+- Resolve agent identity only when accessing agent-specific files. Honor explicit `AGENT_KIND` and `AGENT_HOME`; otherwise use the active host's documented configuration. Codex uses `${CODEX_HOME:-~/.codex}` and Claude uses `${CLAUDE_HOME:-~/.claude}` when their runtime identifies itself. For Cursor, Devin, Hermes, or another host, use its configured skill location or resolve resources relative to the loaded skill. Ask for configuration only when an unresolved path blocks the task.
 
 ## Session End
 
@@ -30,7 +24,7 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 - **Be concise.** Bullet points over paragraphs. Actionable items over narrative analysis. User will redirect if verbose.
 - **No hard-wrapped Markdown.** Write each paragraph and list item as one continuous line and rely on soft-wrap. Never add manual line breaks mid-paragraph to hit a column width. Newlines are only for separating paragraphs, list items, headings, code fences, and tables.
 - Explain code with flow charts/diagrams tracing through components and their interactions
-- When uncertain, ask rather than assume
+- Continue reversible investigation and routine implementation choices within the requested scope. Ask when missing information or an unresolved scope decision blocks the result; reuse authorization already given.
 - No emojis in code, commits, or communication
 - When referencing code, include `file_path:line_number` for easy navigation
 - **Never mention the assistant brand in PRs or commits. No Co-Authored-By lines.**

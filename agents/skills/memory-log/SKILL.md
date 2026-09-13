@@ -78,8 +78,12 @@ Also update `~/memory/INDEX.md` registry table to keep the "Last Active" column 
 
 ## Step 5: Commit
 
+Inspect `git status --short` and the staged diff first. Stage only this task's exact note, artifact, and index paths with `git add -- <paths>`. Commit only those paths; if unrelated changes are already staged, use `git commit --only -- <paths>` so they remain outside this commit and stay staged. Review the resulting commit before pushing. Do not stage an entire project directory when it contains concurrent work.
+
 ```bash
-cd ~/memory && git add -A && git commit -m "<project>: <short description>" && git push
+git -C "$HOME/memory" add -- <task-note> <changed-index>
+git -C "$HOME/memory" commit --only -m "<project>: <short description>" -- <task-note> <changed-index>
+git -C "$HOME/memory" push
 ```
 
 Push every memory commit. Incremental memory pushes are encouraged.

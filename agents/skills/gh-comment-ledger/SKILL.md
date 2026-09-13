@@ -5,7 +5,7 @@ description: Triage GitHub PR feedback into an actionable ledger before editing 
 
 # GH Comment Ledger
 
-Use this skill to inspect GitHub PR feedback before editing. Default to read-only triage: fetch comments, build the ledger table, and wait for the user to choose rows unless they explicitly ask to fix all actionable rows.
+Use this skill to classify GitHub PR feedback before editing. For triage-only requests, return the ledger. For requests to address feedback, fix demonstrated in-scope failures and validate them without requiring another row-selection turn. Respect any rows or scope the user selected.
 
 Routing rule: this skill owns the first pass for PR comments. Use `github:gh-address-comments` only after the ledger exists or when the user explicitly names that curated skill.
 
@@ -19,7 +19,7 @@ This skill vendors the `gh-address-comments` GraphQL approach because flat PR co
    - Run without arguments only when the current branch is associated with the PR.
 2. Fetch thread-aware comments:
    ```bash
-   python3 agents/skills/gh-comment-ledger/scripts/fetch_comments.py --url https://github.com/OWNER/REPO/pull/123 > /tmp/gh-comment-ledger.json
+   python3 <installed-skill-directory>/scripts/fetch_comments.py --url https://github.com/OWNER/REPO/pull/123 > /tmp/gh-comment-ledger.json
    ```
 3. Build the ledger from `conversation_comments`, `reviews`, and `review_threads`.
    - Put unresolved, non-outdated review threads first.
@@ -28,8 +28,8 @@ This skill vendors the `gh-address-comments` GraphQL approach because flat PR co
    - Triage the substance, not just the status. An actionable row must name an in-scope failure case: precondition/input, affected path, and concrete outcome. Prefer the reviewer's reproduction; otherwise trace it in code before recommending a change.
    - Mark speculative edge cases, style preferences, unsupported inputs, and alternative designs `not actionable` unless they show a concrete contract, safety, security, or measurable-performance failure. Do not invent defensive code to make every hypothetical valid.
 4. Return the table before code changes.
-5. If the user selects rows, implement only those rows. If a row needs explanation rather than code, draft the reply instead of forcing a change.
-6. After selected work, add a short GitHub comment for each fixed row: `[AI] Fixed in <commit>. <one-sentence summary>`.
+5. Implement the authorized rows. If a row needs explanation rather than code, draft the reply instead of forcing a change.
+6. When GitHub replies are explicitly authorized, reply to each addressed source thread: `Fixed in <commit>. <one-sentence summary>`. Otherwise return reply drafts locally.
 7. Return an updated mini-ledger with `fixed`, `reply drafted`, `deferred`, or `not actionable`.
 
 ## Ledger Table
@@ -50,12 +50,12 @@ Rules:
 
 ## Write Safety
 
-- Do not edit code until the user selects rows or explicitly says to fix all actionable rows.
-- Do not post replies, resolve threads, or submit reviews unless the user explicitly asks for GitHub writes; the fixed-row comment above is allowed after the user asks to fix selected rows.
-- If comments conflict, stop and show the tradeoff.
+- A request to address feedback authorizes relevant code changes; a triage-only request does not.
+- Do not post replies, resolve threads, or submit reviews unless the user explicitly authorized those GitHub actions. Permission to fix code alone does not authorize communication.
+- If comments conflict, investigate against the contract and show any unresolved tradeoff; continue independent authorized rows.
 - If a comment is ambiguous, mark it `reply` or `defer` and draft the question.
 - Keep every code change traceable to a ledger row.
-- Post the `[AI] Fixed in <commit>. ...` comment only for rows actually addressed by a commit; keep the summary to one sentence.
+- Post a fixed reply only for rows actually addressed by a commit; keep the summary to one sentence.
 
 ## Fallback
 
