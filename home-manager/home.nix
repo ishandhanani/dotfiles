@@ -41,6 +41,7 @@ in
     ./modules/bash.nix
     ./modules/ssh.nix
     ./modules/neovim.nix
+    ./modules/box-telemetry.nix  # opt-in per host (boxTelemetry.enable), see hosts/
   ];
   
   # Unified packages with platform-specific additions

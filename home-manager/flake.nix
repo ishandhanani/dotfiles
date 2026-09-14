@@ -69,7 +69,7 @@
         
         "work-desktop" = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
+          modules = [ ./home.nix ./hosts/work-desktop.nix ];
           extraSpecialArgs = {
             user = "idhanani";
             homeDirectory = "/home/idhanani";
