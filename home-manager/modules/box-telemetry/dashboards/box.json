@@ -1,6 +1,6 @@
 {
-  "uid": "box-telemetry",
-  "title": "box -- reachability, network, services, health",
+  "uid": "box",
+  "title": "box",
   "tags": [
     "box-telemetry"
   ],
@@ -23,29 +23,17 @@
   "links": [],
   "panels": [
     {
-      "type": "row",
-      "title": "Reachability -- from this box",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
       "type": "stat",
-      "title": "Public DNS (system resolver)",
+      "title": "CPU busy",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 0,
         "w": 8,
-        "h": 3
+        "h": 4
       },
       "targets": [
         {
@@ -53,7 +41,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "probe_success{job=\"dns\",resolver=\"system\"}",
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
           "legendFormat": "",
           "refId": "A",
           "range": true
@@ -61,6 +49,8 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "percent",
+          "decimals": 0,
           "color": {
             "mode": "thresholds"
           },
@@ -68,42 +58,27 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "#d03b3b",
+                "color": "#0ca30c",
                 "value": null
               },
               {
-                "color": "#0ca30c",
-                "value": 1
+                "color": "#fab219",
+                "value": 70
+              },
+              {
+                "color": "#d03b3b",
+                "value": 90
               }
             ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "DEAD",
-                  "color": "#d03b3b",
-                  "index": 0
-                },
-                "1": {
-                  "text": "RESOLVING",
-                  "color": "#0ca30c",
-                  "index": 1
-                }
-              }
-            }
-          ]
+          }
         },
         "overrides": []
       },
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
+        "colorMode": "value",
+        "graphMode": "area",
         "textMode": "value",
         "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -115,16 +90,16 @@
     },
     {
       "type": "stat",
-      "title": "HTTPS sites reachable",
+      "title": "Memory used",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 8,
-        "y": 1,
+        "y": 0,
         "w": 8,
-        "h": 3
+        "h": 4
       },
       "targets": [
         {
@@ -132,7 +107,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(probe_success{job=\"https\"})",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
           "legendFormat": "",
           "refId": "B",
           "range": true
@@ -140,7 +115,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
+          "unit": "percent",
           "decimals": 0,
           "color": {
             "mode": "thresholds"
@@ -149,8 +124,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "#0ca30c",
                 "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 80
+              },
+              {
+                "color": "#d03b3b",
+                "value": 92
               }
             ]
           }
@@ -158,12 +141,10 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "none",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "value",
         "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -175,16 +156,16 @@
     },
     {
       "type": "stat",
-      "title": "HTTPS sites probed",
+      "title": "Disk used (/)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 16,
-        "y": 1,
+        "y": 0,
         "w": 8,
-        "h": 3
+        "h": 4
       },
       "targets": [
         {
@@ -192,7 +173,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "count(probe_success{job=\"https\"})",
+          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})",
           "legendFormat": "",
           "refId": "C",
           "range": true
@@ -200,7 +181,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
+          "unit": "percent",
           "decimals": 0,
           "color": {
             "mode": "thresholds"
@@ -209,8 +190,16 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text",
+                "color": "#0ca30c",
                 "value": null
+              },
+              {
+                "color": "#fab219",
+                "value": 80
+              },
+              {
+                "color": "#d03b3b",
+                "value": 92
               }
             ]
           }
@@ -218,12 +207,10 @@
         "overrides": []
       },
       "options": {
-        "colorMode": "none",
+        "colorMode": "value",
         "graphMode": "area",
         "textMode": "value",
         "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -234,8 +221,8 @@
       }
     },
     {
-      "type": "state-timeline",
-      "title": "DNS answers by resolver",
+      "type": "timeseries",
+      "title": "Load (1m) vs cores",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -243,308 +230,6 @@
       "gridPos": {
         "x": 0,
         "y": 4,
-        "w": 12,
-        "h": 6
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "probe_success{job=~\"dns.*\"}",
-          "legendFormat": "{{resolver}}",
-          "refId": "D",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "lineWidth": 0,
-            "fillOpacity": 85
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#d03b3b",
-                "value": null
-              },
-              {
-                "color": "#0ca30c",
-                "value": 1
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "no answer",
-                  "color": "#d03b3b",
-                  "index": 0
-                },
-                "1": {
-                  "text": "answering",
-                  "color": "#0ca30c",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "mergeValues": true,
-        "showValue": "never",
-        "alignValue": "left",
-        "rowHeight": 0.8,
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "DNS lookup time by resolver",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 12,
-        "h": 6
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "probe_duration_seconds{job=~\"dns.*\"}",
-          "legendFormat": "{{resolver}}",
-          "refId": "E",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "decimals": 3
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "state-timeline",
-      "title": "HTTPS reachability by site",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 10,
-        "w": 12,
-        "h": 6
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "probe_success{job=\"https\"}",
-          "legendFormat": "{{site}}",
-          "refId": "F",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "lineWidth": 0,
-            "fillOpacity": 85
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#d03b3b",
-                "value": null
-              },
-              {
-                "color": "#0ca30c",
-                "value": 1
-              }
-            ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "unreachable",
-                  "color": "#d03b3b",
-                  "index": 0
-                },
-                "1": {
-                  "text": "reachable",
-                  "color": "#0ca30c",
-                  "index": 1
-                }
-              }
-            }
-          ]
-        },
-        "overrides": []
-      },
-      "options": {
-        "mergeValues": true,
-        "showValue": "never",
-        "alignValue": "left",
-        "rowHeight": 0.8,
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "HTTPS probe duration by site",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 10,
-        "w": 12,
-        "h": 6
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "probe_duration_seconds{job=\"https\"}",
-          "legendFormat": "{{site}}",
-          "refId": "G",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "decimals": 2
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "row",
-      "title": "Network",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
-      "type": "timeseries",
-      "title": "Throughput by interface (rx solid, tx dashed)",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 17,
         "w": 12,
         "h": 7
       },
@@ -554,9 +239,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*\"}[1m])",
-          "legendFormat": "{{device}} rx",
-          "refId": "H",
+          "expr": "node_load1",
+          "legendFormat": "load1",
+          "refId": "D",
           "range": true
         },
         {
@@ -564,9 +249,78 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br-.*\"}[1m])",
+          "expr": "count(node_cpu_seconds_total{mode=\"idle\"})",
+          "legendFormat": "cores",
+          "refId": "E",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "pointSize": 8,
+            "spanNulls": false,
+            "axisSoftMin": 0,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Network throughput by interface (rx +, tx -)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[1m])",
+          "legendFormat": "{{device}} rx",
+          "refId": "F",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "-rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|br-.*|docker.*\"}[1m])",
           "legendFormat": "{{device}} tx",
-          "refId": "I",
+          "refId": "G",
           "range": true
         }
       ],
@@ -578,100 +332,16 @@
           },
           "custom": {
             "drawStyle": "line",
-            "lineInterpolation": "linear",
             "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
             "pointSize": 8,
             "spanNulls": false,
-            "axisPlacement": "auto",
             "axisSoftMin": 0,
             "stacking": {
               "mode": "none"
             }
           }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".* tx"
-            },
-            "properties": [
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    10,
-                    10
-                  ]
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Kernel routes by device",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 17,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "count by (device) (node_network_route_info)",
-          "legendFormat": "{{device}}",
-          "refId": "J",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "decimals": 0
         },
         "overrides": []
       },
@@ -688,29 +358,17 @@
       }
     },
     {
-      "type": "row",
-      "title": "Services & processes",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
       "type": "state-timeline",
-      "title": "systemd units (system scope)",
+      "title": "systemd units",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 11,
         "w": 12,
-        "h": 8
+        "h": 7
       },
       "targets": [
         {
@@ -720,7 +378,7 @@
           },
           "expr": "node_systemd_unit_state{state=\"active\"}",
           "legendFormat": "{{name}}",
-          "refId": "K",
+          "refId": "H",
           "range": true
         }
       ],
@@ -784,16 +442,16 @@
     },
     {
       "type": "state-timeline",
-      "title": "Process presence",
+      "title": "DNS answers by resolver",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "x": 12,
-        "y": 25,
+        "y": 11,
         "w": 12,
-        "h": 8
+        "h": 7
       },
       "targets": [
         {
@@ -801,9 +459,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "namedprocess_namegroup_num_procs > bool 0",
-          "legendFormat": "{{groupname}}",
-          "refId": "L",
+          "expr": "probe_success{job=~\"dns.*\"}",
+          "legendFormat": "{{resolver}}",
+          "refId": "I",
           "range": true
         }
       ],
@@ -834,12 +492,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "absent",
+                  "text": "no answer",
                   "color": "#d03b3b",
                   "index": 0
                 },
                 "1": {
-                  "text": "running",
+                  "text": "answering",
                   "color": "#0ca30c",
                   "index": 1
                 }
@@ -867,556 +525,16 @@
     },
     {
       "type": "timeseries",
-      "title": "Process CPU",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 33,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (groupname) (rate(namedprocess_namegroup_cpu_seconds_total[2m])) * 100",
-          "legendFormat": "{{groupname}}",
-          "refId": "M",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Process resident memory",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 33,
-        "w": 12,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (groupname) (namedprocess_namegroup_memory_bytes{memtype=\"resident\"})",
-          "legendFormat": "{{groupname}}",
-          "refId": "N",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "row",
-      "title": "Box health",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 40,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
-      "type": "stat",
-      "title": "CPU busy",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 41,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
-          "legendFormat": "",
-          "refId": "O",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#0ca30c",
-                "value": null
-              },
-              {
-                "color": "#fab219",
-                "value": 70
-              },
-              {
-                "color": "#d03b3b",
-                "value": 90
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Load (1m) per core",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 6,
-        "y": 41,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "node_load1 / count(node_cpu_seconds_total{mode=\"idle\"})",
-          "legendFormat": "",
-          "refId": "P",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none",
-          "decimals": 2,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#0ca30c",
-                "value": null
-              },
-              {
-                "color": "#fab219",
-                "value": 1
-              },
-              {
-                "color": "#d03b3b",
-                "value": 2
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Memory used",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 41,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
-          "legendFormat": "",
-          "refId": "Q",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#0ca30c",
-                "value": null
-              },
-              {
-                "color": "#fab219",
-                "value": 80
-              },
-              {
-                "color": "#d03b3b",
-                "value": 92
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Disk used (/)",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 41,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})",
-          "legendFormat": "",
-          "refId": "R",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#0ca30c",
-                "value": null
-              },
-              {
-                "color": "#fab219",
-                "value": 80
-              },
-              {
-                "color": "#d03b3b",
-                "value": 92
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "CPU busy %",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 45,
-        "w": 8,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[2m])))",
-          "legendFormat": "busy",
-          "refId": "S",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Memory",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 45,
-        "w": 8,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
-          "legendFormat": "used",
-          "refId": "T",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "node_memory_MemTotal_bytes",
-          "legendFormat": "total",
-          "refId": "U",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "showPoints": "never",
-            "pointSize": 8,
-            "spanNulls": false,
-            "axisPlacement": "auto",
-            "axisSoftMin": 0,
-            "stacking": {
-              "mode": "none"
-            }
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "type": "timeseries",
       "title": "Disk free (/)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 16,
-        "y": 45,
-        "w": 8,
-        "h": 7
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 6
       },
       "targets": [
         {
@@ -1426,7 +544,7 @@
           },
           "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"}",
           "legendFormat": "free",
-          "refId": "V",
+          "refId": "J",
           "range": true
         }
       ],
@@ -1438,14 +556,11 @@
           },
           "custom": {
             "drawStyle": "line",
-            "lineInterpolation": "linear",
             "lineWidth": 2,
             "fillOpacity": 0,
-            "gradientMode": "none",
             "showPoints": "never",
             "pointSize": 8,
             "spanNulls": false,
-            "axisPlacement": "auto",
             "axisSoftMin": 0,
             "stacking": {
               "mode": "none"

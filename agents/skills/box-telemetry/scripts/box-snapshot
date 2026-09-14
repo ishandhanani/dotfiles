@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# box-snapshot -- the whole box in ~40 lines. Shell facts first (works with Prometheus down), then the
+# stack's view (probes, watched units, routes). Compact on purpose: an agent should read this once,
+# not run ten commands.
+set -uo pipefail
+PROM="${PROM_URL:-http://localhost:9091}"
+q() { curl -sf --max-time 4 --data-urlencode "query=$1" "$PROM/api/v1/query" 2>/dev/null \
+      | python3 -c 'import json,sys
+for r in json.load(sys.stdin)["data"]["result"]:
+    m={k:v for k,v in r["metric"].items() if k!="__name__"}
+    print("   ", ",".join(f"{k}={v}" for k,v in sorted(m.items())) or "-", r["value"][1])' 2>/dev/null; }
+
+echo "== $(hostname)  up $(uptime -p | sed 's/^up //')  load $(cut -d' ' -f1-3 /proc/loadavg)  $(nproc) cores"
+free -h | awk '/^Mem:/{printf "   mem %s/%s used", $3, $2} /^Swap:/{printf "  swap %s/%s\n", $3, $2}'
+df -h / 2>/dev/null | awk 'NR==2{printf "   disk / %s used of %s (%s)\n", $3, $2, $5}'
+echo "== failed units";  (systemctl --failed --no-legend --plain 2>/dev/null; systemctl --user --failed --no-legend --plain 2>/dev/null) | awk '{print "   ", $1, $4}' | sed '/^ *$/d'; true
+echo "== listeners (non-loopback)"; ss -Htln 2>/dev/null | awk '$4 !~ /^127\.|^\[::1\]/ {split($4,a,":"); print a[length(a)]}' | sort -un | paste -sd' ' | sed 's/^/    /'
+echo "== interfaces"; ip -brief addr 2>/dev/null | awk '$1!="lo"{printf "    %-14s %-8s %s\n", $1, $2, $3}'
+echo "== default route"; ip route show default 2>/dev/null | sed 's/^/    /'
+echo "== docker"; docker ps --format '    {{.Names}}  {{.Status}}' 2>/dev/null | head -12
+echo "== recent errors (journal, 30m)"; journalctl -p err --since -30min --no-pager -o cat 2>/dev/null | sort | uniq -c | sort -rn | head -6 | sed 's/^/    /'
+
+if curl -sf --max-time 3 "$PROM/-/ready" >/dev/null 2>&1; then
+  echo "== probes (probe_success)";           q 'probe_success'
+  echo "== watched systemd units (1=active)"; q 'node_systemd_unit_state{state="active"}'
+  echo "== routes per device";                q 'count by (device) (node_network_route_info)'
+  echo "== scrape targets down";              curl -sf --max-time 4 "$PROM/api/v1/targets" | python3 -c 'import json,sys
+bad=[t for t in json.load(sys.stdin)["data"]["activeTargets"] if t["health"]!="up"]
+print("    none" if not bad else "\n".join("    {} {}".format(t["labels"].get("job"), (t.get("lastError") or "")[:60]) for t in bad))'
+else
+  echo "== prometheus at $PROM not reachable -- stack down? try: systemctl --user status box-telemetry.service"
+fi

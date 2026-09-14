@@ -1,13 +1,11 @@
 { config, lib, pkgs, ... }:
 
-# Box telemetry: Prometheus + Grafana + node/process/blackbox exporters, run as a docker compose
-# stack whose every config file is rendered by Nix. Gives an agent (or you) one place to ask
-# "is X up / was DNS down at 20:30 / what is this box doing" instead of poking ss/dig/ps by hand.
-#
-# Host-private detail (corp resolvers, private probes, app dashboards) never enters this repo:
-#   ~/.config/box-telemetry/scrape.d/*.yml   -> extra Prometheus scrape configs, read at runtime
-#   ~/.config/box-telemetry/dashboards/*.json -> extra Grafana dashboards, provisioned at runtime
-# See agents/skills/box-telemetry/SKILL.md for the query recipe.
+# Minimal box telemetry: Prometheus + node_exporter + Grafana (one small dashboard), run as a
+# docker compose stack whose config files are rendered by Nix. Optional blackbox probes when a host
+# declares any. Deliberately small; extend at runtime, not by growing this module:
+#   ~/.config/box-telemetry/scrape.d/*.yml    extra Prometheus scrape_configs (mapping with scrape_configs:)
+#   ~/.config/box-telemetry/dashboards/*.json extra Grafana dashboards
+# Agent-facing usage: agents/skills/box-telemetry/SKILL.md
 
 with lib;
 
@@ -16,11 +14,8 @@ let
   runtimeDir = "${config.home.homeDirectory}/.config/box-telemetry";
   yaml = pkgs.formats.yaml { };
 
-  blackboxRelabel = [
-    { source_labels = [ "__address__" ]; target_label = "__param_target"; }
-    { source_labels = [ "__param_target" ]; target_label = "instance"; }
-    { target_label = "__address__"; replacement = "localhost:9115"; }
-  ];
+  probesEnabled = cfg.probes.dns != { } || cfg.probes.https != { };
+  blackboxAddr = "localhost:${toString cfg.blackboxPort}";
 
   probeJob = name: module: targets: {
     job_name = name;
@@ -28,35 +23,33 @@ let
     scrape_interval = "15s";
     params.module = [ module ];
     static_configs = targets;
-    relabel_configs = blackboxRelabel;
+    relabel_configs = [
+      { source_labels = [ "__address__" ]; target_label = "__param_target"; }
+      { source_labels = [ "__param_target" ]; target_label = "instance"; }
+      { target_label = "__address__"; replacement = blackboxAddr; }
+    ];
   };
 
   prometheusConfig = yaml.generate "prometheus.yml" {
     global = { scrape_interval = cfg.scrapeInterval; evaluation_interval = cfg.scrapeInterval; };
     scrape_configs = [
-      { job_name = "node"; static_configs = [{ targets = [ "localhost:9100" ]; }]; }
-      { job_name = "process"; static_configs = [{ targets = [ "localhost:9256" ]; }]; }
-      (probeJob "https" "https_up"
-        (mapAttrsToList (site: url: { targets = [ url ]; labels.site = site; }) cfg.probes.https))
-      (probeJob "dns" "dns_a"
-        (mapAttrsToList (name: addr: { targets = [ addr ]; labels.resolver = name; }) cfg.probes.dnsResolvers))
+      { job_name = "node"; static_configs = [{ targets = [ "localhost:${toString cfg.nodeExporterPort}" ]; }]; }
+    ] ++ optionals probesEnabled [
+      (probeJob "dns" "dns_a" (mapAttrsToList (n: a: { targets = [ a ]; labels.resolver = n; }) cfg.probes.dns))
+      (probeJob "https" "https_up" (mapAttrsToList (n: u: { targets = [ u ]; labels.site = n; }) cfg.probes.https))
     ];
-    # Host-private jobs live outside the repo and are picked up here.
     scrape_config_files = [ "/etc/prometheus/scrape.d/*.yml" ];
   };
 
   blackboxConfig = yaml.generate "blackbox.yml" {
     modules = {
       http_2xx = { prober = "http"; timeout = "5s"; http = { method = "GET"; valid_status_codes = [ 200 ]; }; };
-      # "Can this box reach the site" -- auth walls and redirects still count as reachable.
       https_up = {
         prober = "http"; timeout = "8s";
         http = { method = "GET"; preferred_ip_protocol = "ip4"; follow_redirects = false;
                  valid_status_codes = [ 200 301 302 303 307 308 401 403 ]; };
       };
-      # Passes only when the target demands auth: a "the lock is still on" probe.
       auth_required = { prober = "http"; timeout = "5s"; http = { method = "GET"; valid_status_codes = [ 401 ]; }; };
-      # Target = a resolver (host:port); query a public name through it.
       dns_a = {
         prober = "dns"; timeout = "5s";
         dns = { transport_protocol = "udp"; preferred_ip_protocol = "ip4"; query_name = cfg.probes.dnsQueryName;
@@ -66,59 +59,55 @@ let
     };
   };
 
-  processExporterConfig = yaml.generate "process-exporter.yml" {
-    process_names = cfg.extraProcessNames ++ [{ name = "{{.Comm}}"; comm = cfg.processGroups; }];
-  };
-
-  grafanaProvisioning = pkgs.runCommand "grafana-provisioning" { } ''
+  grafanaProvisioning = pkgs.runCommand "box-grafana-provisioning" { } ''
     mkdir -p $out/datasources $out/dashboards
     cat > $out/datasources/prometheus.yml <<EOF
     apiVersion: 1
     datasources:
-      - name: Prometheus
-        uid: prometheus
-        type: prometheus
-        access: proxy
-        url: http://localhost:${toString cfg.prometheusPort}
-        isDefault: true
-        editable: false
+      - { name: Prometheus, uid: prometheus, type: prometheus, access: proxy, url: "http://localhost:${toString cfg.prometheusPort}", isDefault: true, editable: false }
     EOF
     cat > $out/dashboards/dashboards.yml <<EOF
     apiVersion: 1
     providers:
-      - name: box-telemetry
-        type: file
-        disableDeletion: false
-        updateIntervalSeconds: 60
-        options: { path: /etc/grafana/dashboards/generic }
-      - name: box-telemetry-extra
-        type: file
-        disableDeletion: false
-        updateIntervalSeconds: 60
-        options: { path: /etc/grafana/dashboards/extra }
+      - { name: box, type: file, disableDeletion: false, updateIntervalSeconds: 60, options: { path: /etc/grafana/dashboards/box } }
+      - { name: box-extra, type: file, disableDeletion: false, updateIntervalSeconds: 60, options: { path: /etc/grafana/dashboards/extra } }
     EOF
   '';
 
-  genericDashboards = pkgs.runCommand "box-dashboards" { } ''
-    mkdir -p $out
-    cp ${./box-telemetry/dashboards/box.json} $out/box.json
+  dashboards = pkgs.runCommand "box-dashboards" { } ''
+    mkdir -p $out && cp ${./box-telemetry/dashboards/box.json} $out/box.json
   '';
 
   unitRegex = "^(${concatStringsSep "|" cfg.systemdUnits})\\.service$$";
 
+  # Built line-by-line so the indentation survives Nix's indented-string stripping.
+  blackboxService = optionalString probesEnabled (concatStringsSep "\n" [
+    ""
+    "  blackbox-exporter:"
+    "    image: prom/blackbox-exporter:latest"
+    "    container_name: ${cfg.projectName}-blackbox"
+    "    restart: unless-stopped"
+    "    network_mode: host"
+    "    volumes:"
+    "      - ${blackboxConfig}:/etc/blackbox_exporter/config.yml:ro"
+    "    command:"
+    "      - --config.file=/etc/blackbox_exporter/config.yml"
+    "      - --web.listen-address=:${toString cfg.blackboxPort}"
+    ""
+  ]);
+
   composeFile = pkgs.writeText "docker-compose.yml" ''
-    # Rendered by home-manager (modules/box-telemetry.nix); do not edit by hand.
-    # Host network on purpose: single-tenant box, every hop is localhost:<port>.
+    # Rendered by home-manager (modules/box-telemetry.nix); edit the Nix, not this file.
     name: ${cfg.projectName}
     services:
       node-exporter:
         image: prom/node-exporter:latest
-        container_name: node-exporter
+        container_name: ${cfg.projectName}-node-exporter
         restart: unless-stopped
         network_mode: host
         pid: host
     ${optionalString cfg.nodeExporterApparmorUnconfined
-      "    # Ubuntu's docker-default AppArmor profile blocks D-Bus; the systemd collector needs it.\n    security_opt:\n      - apparmor=unconfined"}
+      "    security_opt: [apparmor=unconfined]  # Ubuntu docker-default blocks D-Bus; systemd collector needs it"}
         volumes:
           - /proc:/host/proc:ro
           - /sys:/host/sys:ro
@@ -126,6 +115,7 @@ let
           - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
           - ${cfg.textfileDir}:/textfile:ro
         command:
+          - --web.listen-address=:${toString cfg.nodeExporterPort}
           - --path.procfs=/host/proc
           - --path.sysfs=/host/sys
           - --path.rootfs=/rootfs
@@ -134,35 +124,10 @@ let
           - --collector.systemd
           - --collector.systemd.unit-include=${unitRegex}
           - --collector.network_route
-
-      process-exporter:
-        image: ncabatoff/process-exporter:latest
-        container_name: process-exporter
-        restart: unless-stopped
-        network_mode: host
-        pid: host
-        privileged: true
-        volumes:
-          - /proc:/host/proc:ro
-          - ${processExporterConfig}:/config/config.yml:ro
-        command:
-          - --procfs=/host/proc
-          - --config.path=/config/config.yml
-          - --web.listen-address=:9256
-
-      blackbox-exporter:
-        image: prom/blackbox-exporter:latest
-        container_name: blackbox-exporter
-        restart: unless-stopped
-        network_mode: host
-        volumes:
-          - ${blackboxConfig}:/etc/blackbox_exporter/config.yml:ro
-        command:
-          - --config.file=/etc/blackbox_exporter/config.yml
-
+    ${blackboxService}
       prometheus:
         image: prom/prometheus:latest
-        container_name: prometheus
+        container_name: ${cfg.projectName}-prometheus
         restart: unless-stopped
         network_mode: host
         volumes:
@@ -176,12 +141,10 @@ let
           - --web.listen-address=:${toString cfg.prometheusPort}
           - --web.enable-lifecycle
     ${concatMapStringsSep "\n" (f: "      - ${f}") cfg.prometheusExtraFlags}
-        depends_on:
-          - node-exporter
 
       grafana:
         image: grafana/grafana-oss:latest
-        container_name: grafana
+        container_name: ${cfg.projectName}-grafana
         restart: unless-stopped
         network_mode: host
         environment:
@@ -192,10 +155,8 @@ let
         volumes:
           - grafana-data:/var/lib/grafana
           - ${grafanaProvisioning}:/etc/grafana/provisioning:ro
-          - ${genericDashboards}:/etc/grafana/dashboards/generic:ro
+          - ${dashboards}:/etc/grafana/dashboards/box:ro
           - ${runtimeDir}/dashboards:/etc/grafana/dashboards/extra:ro
-        depends_on:
-          - prometheus
 
     volumes:
       prometheus-data:
@@ -211,75 +172,40 @@ let
 in
 {
   options.boxTelemetry = {
-    enable = mkEnableOption "box telemetry stack (Prometheus, Grafana, node/process/blackbox exporters via docker compose)";
-
-    projectName = mkOption {
-      type = types.str; default = "observability";
-      description = "docker compose project name; the named volumes are <project>_prometheus-data / _grafana-data.";
-    };
-    prometheusPort = mkOption { type = types.port; default = 9090; };
-    grafanaPort = mkOption { type = types.port; default = 3000; };
+    enable = mkEnableOption "minimal box telemetry stack (Prometheus + node_exporter + Grafana via docker compose)";
+    projectName = mkOption { type = types.str; default = "box-telemetry"; description = "compose project; volumes are <project>_prometheus-data / _grafana-data"; };
+    prometheusPort = mkOption { type = types.port; default = 9091; };
+    grafanaPort = mkOption { type = types.port; default = 3001; };
+    nodeExporterPort = mkOption { type = types.port; default = 9100; };
+    blackboxPort = mkOption { type = types.port; default = 9116; };
     retention = mkOption { type = types.str; default = "90d"; };
     scrapeInterval = mkOption { type = types.str; default = "30s"; };
     prometheusExtraFlags = mkOption { type = types.listOf types.str; default = [ ]; };
-
-    textfileDir = mkOption {
-      type = types.str; default = "${runtimeDir}/textfile";
-      description = "node_exporter textfile-collector directory (drop *.prom files here).";
-    };
+    textfileDir = mkOption { type = types.str; default = "${runtimeDir}/textfile"; description = "node_exporter textfile collector dir"; };
     nodeExporterApparmorUnconfined = mkOption { type = types.bool; default = true; };
-
     systemdUnits = mkOption {
       type = types.listOf types.str;
       default = [ "docker" "ssh" "systemd-resolved" "NetworkManager" ];
-      description = "System-scope units (no .service suffix) to export state for. systemd --user units are not visible; watch their processes instead.";
+      description = "System-scope units (no .service) whose state is exported. systemd --user units are not visible.";
     };
-    processGroups = mkOption {
-      type = types.listOf types.str;
-      default = [ "dockerd" "sshd" "prometheus" "grafana" "node_exporter" "codex" "claude" ];
-      description = "Process comm names (15-char kernel truncation applies) to track presence/CPU/RSS for.";
-    };
-    extraProcessNames = mkOption {
-      type = types.listOf types.attrs; default = [ ];
-      description = "Raw process-exporter process_names entries; matched before the comm list (e.g. split two daemons with the same comm by cmdline).";
-    };
-
     probes = {
-      https = mkOption {
-        type = types.attrsOf types.str;
-        default = { github = "https://github.com"; anthropic-api = "https://api.anthropic.com/v1/models"; };
-        description = "site label -> URL, probed end-to-end via the system resolver.";
-      };
-      dnsResolvers = mkOption {
-        type = types.attrsOf types.str;
-        default = { system = "127.0.0.53:53"; };
-        description = "resolver label -> host:port. Each is asked for probes.dnsQueryName separately, so a dead VPN/ZTNA resolver shows up as such.";
-      };
+      dns = mkOption { type = types.attrsOf types.str; default = { }; description = "resolver label -> host:port; each is asked for dnsQueryName. Any entry enables blackbox."; };
+      https = mkOption { type = types.attrsOf types.str; default = { }; description = "site label -> URL. Any entry enables blackbox."; };
       dnsQueryName = mkOption { type = types.str; default = "github.com"; };
     };
   };
 
   config = mkIf cfg.enable {
-    assertions = [{
-      assertion = pkgs.stdenv.isLinux;
-      message = "boxTelemetry runs a host-network docker compose stack; Linux only.";
-    }];
+    assertions = [{ assertion = pkgs.stdenv.isLinux; message = "boxTelemetry: Linux only (host-network docker compose)."; }];
 
     home.file.".config/box-telemetry/docker-compose.yml".source = composeFile;
-    home.file.".config/box-telemetry/README.md".text = ''
-      Rendered by home-manager (modules/box-telemetry.nix). Grafana :${toString cfg.grafanaPort}, Prometheus :${toString cfg.prometheusPort}.
-      Host-private additions go here (read at runtime, never in the repo):
-        scrape.d/*.yml   extra Prometheus scrape_configs (then: curl -X POST localhost:${toString cfg.prometheusPort}/-/reload)
-        dashboards/*.json extra Grafana dashboards (picked up within 60 s)
-      Manage: systemctl --user {status,start} box-telemetry.service ; docker compose -p ${cfg.projectName} ps
-    '';
 
     systemd.user.services.box-telemetry = {
       Unit = { Description = "Box telemetry stack (docker compose up -d)"; After = [ "network-online.target" ]; };
       Service = { Type = "oneshot"; RemainAfterExit = true; ExecStart = "${composeUp}"; TimeoutStartSec = "5min"; };
       Install.WantedBy = [ "default.target" ];
     };
-    # Re-asserts the stack every 10 minutes: a dirty reboot once left Prometheus down for three days.
+    # A dirty reboot once left Prometheus down for three days; re-assert every 10 minutes.
     systemd.user.timers.box-telemetry = {
       Unit.Description = "Keep the box telemetry stack running";
       Timer = { OnBootSec = "2min"; OnUnitActiveSec = "10min"; Unit = "box-telemetry.service"; };
