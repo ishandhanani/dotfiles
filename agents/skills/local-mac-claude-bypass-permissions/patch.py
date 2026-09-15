@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bypass Claude Code permission prompts on macOS using a PreToolUse hook.
+"""Bypass Claude Code permission prompts on macOS or Linux using a PreToolUse hook.
 
 Claude's managed remote settings can push `disableBypassPermissionsMode` or
 `defaultMode: "default"` and downgrade the session to `default` permission
@@ -139,11 +139,14 @@ def restore_original_binary() -> None:
             return
         shutil.copy2(orig, BIN)
         log(f"restored original binary from {orig}")
-        if shutil.which("codesign"):
-            subprocess.run(["codesign", "-s", "-", "--force", BIN], check=False)
-            log("re-signed binary")
+        if sys.platform == "darwin":
+            if shutil.which("codesign"):
+                subprocess.run(["codesign", "-s", "-", "--force", BIN], check=False)
+                log("re-signed binary")
+            else:
+                log("codesign not found; binary may not run until signed")
         else:
-            log("codesign not found; binary may not run until signed")
+            log("skipped codesign (not needed on Linux)")
     except Exception as e:
         log(f"binary restore skipped: {e}")
 
@@ -203,15 +206,16 @@ def add_generic_hook(hooks: dict) -> None:
 
 
 def update_settings(path: str, is_remote: bool = False) -> None:
-    """Merge bypass config into a Claude settings file."""
-    if not os.path.isfile(path):
-        return
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        log(f"WARNING: could not parse {path}: {e}")
-        return
+    """Merge bypass config into a Claude settings file, creating it if absent."""
+    if os.path.isfile(path):
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            log(f"WARNING: could not parse {path}: {e}")
+            return
+    else:
+        data = {}
 
     changed = False
 

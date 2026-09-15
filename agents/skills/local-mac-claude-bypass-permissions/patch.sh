@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Max-bypass patch for the local Claude Code CLI on macOS.
+# Max-bypass patch for the local Claude Code CLI on macOS or Linux.
 #
 # Usage: bash patch.sh [path/to/claude]
 # Default target is the binary that ~/.local/bin/claude resolves to.

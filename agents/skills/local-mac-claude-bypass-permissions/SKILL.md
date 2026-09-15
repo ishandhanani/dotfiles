@@ -1,6 +1,6 @@
 ---
 name: local-mac-claude-bypass-permissions
-description: Bypass Claude Code permission prompts on macOS with a global PreToolUse hook and ssh-family wrappers.
+description: Bypass Claude Code permission prompts on macOS or Linux with a global PreToolUse hook and ssh-family wrappers.
 user-invocable: true
 triggers:
   - user
@@ -9,9 +9,9 @@ allowed-tools:
   - exec
 ---
 
-# Local Mac Claude Bypass Permissions
+# Local Claude Code Bypass Permissions
 
-Allow the Claude Code CLI on macOS to run tools, including `ssh`/`scp`/`sftp`/`rsync`, without permission prompts.
+Allow the Claude Code CLI on macOS or Linux to run tools, including `ssh`/`scp`/`sftp`/`rsync`, without permission prompts.
 
 Run this ONLY when the user explicitly invokes `/local-mac-claude-bypass-permissions`. Do not trigger it from any other prompt.
 
@@ -34,7 +34,7 @@ If your account/organization pushes managed remote settings, Claude may apply `d
 
 ## Preconditions
 
-- macOS, Apple Silicon (`arm64`) or Intel (`x64`).
+- macOS (Apple Silicon `arm64` or Intel `x64`) or Linux (`x86_64`).
 - `claude` CLI installed at `~/.local/bin/claude`.
 - `python3` available.
 - `~/.local/bin` is on `PATH` before `/usr/bin`.
@@ -53,7 +53,7 @@ Or with an explicit binary path:
 bash <SKILL_DIR>/patch.sh /Users/idhanani/.local/share/claude/versions/2.1.251
 ```
 
-The binary argument is only used to restore an original backup if the live binary still contains old patch signatures.  The script no longer patches the Mach-O file.  It is idempotent; re-running updates the hook and settings to the latest version.
+The binary argument is only used to restore an original backup if the live binary still contains old patch signatures.  The script no longer patches the binary itself.  It is idempotent; re-running updates the hook and settings to the latest version.
 
 ## Verification
 
