@@ -7,6 +7,8 @@ in
   programs.zsh = {
     enable = true;
     enableCompletion = true;
+    # Keep shell shortcuts nonmodal even when EDITOR/VISUAL is nvim.
+    defaultKeymap = "emacs";
 
     # Use cached compinit - only regenerate once per day
     completionInit = ''
@@ -88,6 +90,8 @@ in
         bindkey '^X^E' edit-command-line
         bindkey "^[b" backward-word
         bindkey "^[f" forward-word
+        bindkey '^[[1;3D' backward-word
+        bindkey '^[[1;3C' forward-word
         
         # Source external env if exists
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
