@@ -1,7 +1,12 @@
 { config, pkgs, lib, ... }:
 
 let
-  isDarwin = pkgs.stdenv.isDarwin;
+  starshipInit = pkgs.runCommand "starship-init.zsh" { } ''
+    STARSHIP_CACHE="$TMPDIR/starship" ${lib.getExe config.programs.starship.package} init zsh --print-full-init > "$out"
+  '';
+  zoxideInit = pkgs.runCommand "zoxide-init.zsh" { } ''
+    ${lib.getExe config.programs.zoxide.package} init zsh ${lib.escapeShellArgs config.programs.zoxide.options} > "$out"
+  '';
 in
 {
   programs.zsh = {
@@ -10,14 +15,9 @@ in
     # Keep shell shortcuts nonmodal even when EDITOR/VISUAL is nvim.
     defaultKeymap = "emacs";
 
-    # Use cached compinit - only regenerate once per day
+    # Validate daily and when the package environment or completion paths change.
     completionInit = ''
-      autoload -Uz compinit
-      if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
-        compinit
-      else
-        compinit -C
-      fi
+      source ${../functions/completion-init.zsh} ${config.home.path}
     '';
 
     # Basic history configuration  
@@ -82,6 +82,11 @@ in
         export GPG_TTY="$(tty)"
       '')
 
+      # Match Home Manager's ordering: zoxide needs compdef from compinit.
+      (lib.mkOrder 851 ''
+        source ${zoxideInit}
+      '')
+
       # Main configuration
       ''
         # Load edit-command-line widget
@@ -131,25 +136,31 @@ in
 
         # Source local machine-specific configs 
         [ -f "$HOME/.zshrc.local" ] && . "$HOME/.zshrc.local"
+
+        if [[ $TERM != "dumb" ]]; then
+          source ${starshipInit}
+        fi
       ''
     ];
   };
 
   programs.starship = {
     enable = true;
-    enableZshIntegration = true;
+    # Source the Nix-built initialization script above.
+    enableZshIntegration = false;
 
     settings = {
       command_timeout = 500;
       aws.disabled = true;
       gcloud.disabled = true;
       git_status.disabled = true;
+      rust.disabled = true;
     };
   };
 
   programs.zoxide = {
     enable = true;
-    enableZshIntegration = true;
+    enableZshIntegration = false;
   };
 
   programs.atuin = {
