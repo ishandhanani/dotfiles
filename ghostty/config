@@ -3,6 +3,7 @@
 # Font
 font-family = Monaco
 font-size = 12
+font-thicken = true
 # iTerm2 'Non Ascii Font' (HackNFM-Regular 12) has no direct Ghostty equivalent
 
 # Appearance / colors (auto-switch with system light/dark mode)
