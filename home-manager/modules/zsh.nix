@@ -7,6 +7,8 @@ in
   programs.zsh = {
     enable = true;
     enableCompletion = true;
+    # Keep shell shortcuts nonmodal even when EDITOR/VISUAL is nvim.
+    defaultKeymap = "emacs";
 
     # Use cached compinit - only regenerate once per day
     completionInit = ''
@@ -82,9 +84,6 @@ in
 
       # Main configuration
       ''
-        # Keep shell shortcuts in Emacs mode even when EDITOR/VISUAL is nvim.
-        bindkey -e
-
         # Load edit-command-line widget
         autoload -Uz edit-command-line
         zle -N edit-command-line
