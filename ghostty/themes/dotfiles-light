@@ -1,6 +1,7 @@
 # Ghostty theme converted from iTerm2 default.json (Light mode)
 
 background = #ffffff
+unfocused-split-fill = #ffffff
 foreground = #000000
 cursor-color = #000000
 cursor-text = #ffffff

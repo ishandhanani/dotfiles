@@ -16,6 +16,7 @@ cursor-style-blink = false
 # Window
 window-width = 80
 window-height = 25
+unfocused-split-opacity = 0.5
 # iTerm2 'Disable Window Resizing' has no direct Ghostty equivalent
 
 # Terminal behavior
