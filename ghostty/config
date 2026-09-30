@@ -1,0 +1,40 @@
+# Ghostty config converted from iTerm2 default.json
+
+# Font
+font-family = Monaco
+font-size = 12
+# iTerm2 'Non Ascii Font' (HackNFM-Regular 12) has no direct Ghostty equivalent
+
+# Appearance / colors (auto-switch with system light/dark mode)
+theme = light:dotfiles-light,dark:dotfiles-dark
+
+# Cursor
+cursor-style = block
+cursor-style-blink = false
+
+# Window
+window-width = 80
+window-height = 25
+# iTerm2 'Disable Window Resizing' has no direct Ghostty equivalent
+
+# Terminal behavior
+term = xterm-256color
+working-directory = /Users/ishandhanani
+window-inherit-working-directory = true
+# iTerm2 'Unlimited Scrollback' approximated with a large byte limit
+scrollback-limit = 100000000
+
+# iTerm2 readline-style navigation key bindings
+keybind = alt+arrow_left=esc:b
+keybind = alt+arrow_right=esc:f
+keybind = cmd+arrow_left=text:\x01
+keybind = cmd+arrow_right=text:\x05
+keybind = alt+backspace=esc:\x7f
+keybind = cmd+backspace=text:\x15
+keybind = alt+delete=esc:d
+keybind = delete=text:\x04
+
+# Unported iTerm2 settings (no Ghostty equivalent)
+# - Visual Bell / Flashing Bell
+# - Badge / Match highlight colors
+# - Cursor shadow
