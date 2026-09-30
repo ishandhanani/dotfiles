@@ -82,12 +82,17 @@ in
 
       # Main configuration
       ''
+        # Keep shell shortcuts in Emacs mode even when EDITOR/VISUAL is nvim.
+        bindkey -e
+
         # Load edit-command-line widget
         autoload -Uz edit-command-line
         zle -N edit-command-line
         bindkey '^X^E' edit-command-line
         bindkey "^[b" backward-word
         bindkey "^[f" forward-word
+        bindkey '^[[1;3D' backward-word
+        bindkey '^[[1;3C' forward-word
         
         # Source external env if exists
         [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
