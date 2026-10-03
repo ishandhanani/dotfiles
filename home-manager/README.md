@@ -58,17 +58,38 @@ nix run home-manager/master -- switch --flake .#work -b backup
 # Or use the Makefile shortcuts: make work | make home | make vm | make vm-arm
 ```
 
-### Alternative: Using nix-darwin (macOS only)
+### System setup: nix-darwin (macOS only)
 
 For system-wide macOS configuration:
 
 ```bash
-# Install nix-darwin
-nix-build https://github.com/LnL7/nix-darwin/archive/master.tar.gz -A installer
-./result/bin/darwin-installer
+# First application from this flake. Use work for idhanani@macbook or home for ishandhanani@macbook.
+sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
 
-# Apply both system and home configuration
-darwin-rebuild switch --flake .#macbook
+# After the first switch, darwin-rebuild is available from the system profile.
+sudo darwin-rebuild switch --flake .#work
+```
+
+If the first switch reports that `~/.profile` would be clobbered and it is a symlink from the Nix installer, move that symlink aside before retrying. The `-b backup` behavior moves regular files, but Home Manager intentionally does not auto-backup symlinks.
+
+The nix-darwin targets embed the matching Home Manager target, so `.#work` applies both system preferences and dotfiles. The standalone Home Manager targets remain available as `homeConfigurations.work` and `homeConfigurations.home`.
+
+The macOS system module manages:
+
+- Caps Lock to Escape, fast key repeat, disabled press-and-hold, dark mode, and Dock recents off
+- Dock size/magnification, Finder desktop media icons, menu bar clock format, and macOS window tiling/widget toggles
+- Trackpad click/gesture defaults and tracking speed
+- Raycast on Cmd-Space with Spotlight hotkeys disabled
+- Cursor settings and Rectangle defaults from this repository
+
+GUI apps stay outside nix-darwin ownership for now. Install Cursor, Google Chrome, iTerm2, Raycast, and Rectangle manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads app bundles directly without requiring Homebrew.
+
+Homebrew is also outside nix-darwin ownership. To bootstrap it through Nix without making Nix manage it:
+
+```bash
+nix run .#install-homebrew
+# or
+make install-homebrew
 ```
 
 ## Usage

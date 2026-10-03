@@ -2,9 +2,12 @@
 
 # AI agent CLIs that are distributed outside nixpkgs
 
+let
+  darwinSystemPath = lib.optionalString pkgs.stdenv.isDarwin ":/usr/bin:/bin:/usr/sbin:/sbin";
+in
 {
   home.activation.installAgentCLIs = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin:$PATH"
+    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin${darwinSystemPath}:$PATH"
     export CI=1
     set -eo pipefail
 
@@ -28,7 +31,17 @@
       fi
 
       echo "📦 Installing Devin..."
-      curl -fsSL https://cli.devin.ai/install.sh | ${pkgs.bash}/bin/bash
+      if curl -fsSL https://cli.devin.ai/install.sh | ${pkgs.bash}/bin/bash; then
+        return 0
+      fi
+
+      if command -v devin >/dev/null 2>&1; then
+        echo "Devin binary installed; skipping interactive setup"
+        return 0
+      fi
+
+      echo "Devin installer failed"
+      return 1
     }
 
     install_cursor() {

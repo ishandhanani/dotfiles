@@ -1,5 +1,5 @@
 {
-  description = "Ishan's minimal Home Manager configuration";
+  description = "Ishan's Home Manager and nix-darwin configuration";
 
   inputs = {
     # Nixpkgs
@@ -10,85 +10,83 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # System-wide macOS configuration.
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/nix-darwin-25.11";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
-  outputs = { self, nixpkgs, home-manager, ... }@inputs:
+  outputs = { self, nixpkgs, home-manager, nix-darwin, ... }@inputs:
     let
       # System types
       darwinSystem = "aarch64-darwin";  # Apple Silicon
       linuxSystem = "x86_64-linux";
+
+      mkHomeConfiguration = system: user: homeDirectory:
+        home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${system};
+          modules = [ ./home.nix ];
+          extraSpecialArgs = {
+            inherit user homeDirectory;
+          };
+        };
+
+      mkDarwinConfiguration = user: homeDirectory:
+        nix-darwin.lib.darwinSystem {
+          system = darwinSystem;
+          specialArgs = {
+            inherit inputs user homeDirectory;
+          };
+          modules = [
+            ./darwin/system.nix
+            home-manager.darwinModules.home-manager
+            {
+              home-manager.useUserPackages = true;
+              home-manager.backupFileExtension = "backup";
+              home-manager.extraSpecialArgs = {
+                inherit user homeDirectory;
+              };
+              home-manager.users.${user} = import ./home.nix;
+            }
+          ];
+        };
     in
     {
+      # nix-darwin system configurations for macOS.
+      darwinConfigurations = {
+        "work" = mkDarwinConfiguration "idhanani" "/Users/idhanani";
+        "home" = mkDarwinConfiguration "ishandhanani" "/Users/ishandhanani";
+      };
+
       # Home Manager configurations
       homeConfigurations = {
         # macOS configuration
-        "home" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${darwinSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "ishandhanani";
-            homeDirectory = "/Users/ishandhanani";
-          };
-        };
+        "home" = mkHomeConfiguration darwinSystem "ishandhanani" "/Users/ishandhanani";
 
-        "work" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${darwinSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "idhanani";
-            homeDirectory = "/Users/idhanani";
-          };
-        };
+        "work" = mkHomeConfiguration darwinSystem "idhanani" "/Users/idhanani";
         
-        "brev-vm" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ubuntu";
-            homeDirectory = "/home/ubuntu";
-          };
-        };
+        "brev-vm" = mkHomeConfiguration linuxSystem "ubuntu" "/home/ubuntu";
 
-        "brev-vm-gpu" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "nvidia";
-            homeDirectory = "/home/nvidia";
-          };
-        };
+        "brev-vm-gpu" = mkHomeConfiguration linuxSystem "nvidia" "/home/nvidia";
 
-        "simbox" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ishan";
-            homeDirectory = "/home/ishan";
-          };
-        };
+        "simbox" = mkHomeConfiguration linuxSystem "ishan" "/home/ishan";
         
-        "work-desktop" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "idhanani";
-            homeDirectory = "/home/idhanani";
-          };
-        };
+        "work-desktop" = mkHomeConfiguration linuxSystem "idhanani" "/home/idhanani";
 
-        "brev-vm-arm" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages."aarch64-linux";
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ubuntu";
-            homeDirectory = "/home/ubuntu";
-          };
-        };
+        "brev-vm-arm" = mkHomeConfiguration "aarch64-linux" "ubuntu" "/home/ubuntu";
       };
 
       formatter = {
         ${darwinSystem} = nixpkgs.legacyPackages.${darwinSystem}.nixpkgs-fmt;
         ${linuxSystem} = nixpkgs.legacyPackages.${linuxSystem}.nixpkgs-fmt;
+      };
+
+      apps.${darwinSystem}.install-homebrew = {
+        type = "app";
+        program = "${./scripts/install-homebrew.sh}";
       };
     };
 }

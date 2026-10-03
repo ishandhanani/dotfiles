@@ -33,8 +33,8 @@
       case "$(uname -s)" in
         Darwin)
           if ! command -v brew >/dev/null 2>&1; then
-            echo "Homebrew is required to install Brev on macOS" >&2
-            return 1
+            echo "Skipping Brev install on macOS without Homebrew" >&2
+            return 0
           fi
           brew install brevdev/homebrew-brev/brev
           ;;

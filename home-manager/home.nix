@@ -25,6 +25,9 @@ in
       "$HOME/.local/bin"
       "$HOME/.local/go/bin"
       "$HOME/go/bin"
+    ] ++ lib.optionals isDarwin [
+      "/opt/homebrew/bin"
+      "/opt/homebrew/sbin"
     ];
   };
   
@@ -41,6 +44,7 @@ in
     ./modules/bash.nix
     ./modules/ssh.nix
     ./modules/neovim.nix
+    ./modules/macos-app-config.nix
   ];
   
   # Unified packages with platform-specific additions
