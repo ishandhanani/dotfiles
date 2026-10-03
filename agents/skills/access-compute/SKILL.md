@@ -1,6 +1,6 @@
 ---
 name: access-compute
-description: Access GPU compute over direct SSH or Teleport. Use for remote builds, runs, or access routing.
+description: Access GPU compute over direct SSH, Teleport, or Modal. Use for remote builds, runs, or access routing.
 ---
 
 # Access Compute
@@ -11,7 +11,7 @@ Use this skill as the entry point for compute work. Keep all source names, alias
 
 1. Read `~/memory/compute/INDEX.md`.
 2. Resolve the user's source name through the aliases in that registry.
-3. Read the linked source note before any DNS, SSH, `tsh`, Kubernetes, or SLURM probe.
+3. Read the linked source note before any DNS, SSH, `tsh`, Kubernetes, SLURM, or Modal probe.
 4. Check the source's tags and restrictions (Tailscale, Teleport, VPN, office network, shared account, restricted QoS, cgroup caps, etc.) and satisfy them before connecting.
 5. Use the access type and command from the source note.
 
@@ -21,6 +21,7 @@ Do not search old project notes for an endpoint when the active source note exis
 
 - For a direct SSH source, use the direct-session flow in this skill.
 - For a Teleport-managed Kubernetes or SLURM source, load `teleport-clusters` and obey its authentication flow.
+- For a Modal source, use the Modal section below.
 - For a large or distributed run, prefer a cluster source unless the user selects a direct source.
 - If the registry has no matching source, stop and ask the user which source to use.
 
@@ -45,7 +46,7 @@ When branch publication is within the user's authorized scope, push the exact ta
 git push origin HEAD:<branch>
 ```
 
-Do not copy a working tree with `rsync` or `scp`; preserve exact Git identity with a remote fetch or bundle.
+Do not copy a working tree with `rsync` or `scp`; preserve exact Git identity with a remote fetch or bundle. Modal is the exception; see the Modal section.
 
 ## Start a Direct Session
 
@@ -84,6 +85,16 @@ For a Dynamo and SGLang source build, load `setup-dynamo-sglang-from-src` after 
 Run long commands in a named `tmux` session. Send stdout and stderr to the session's `logs/` directory. Put benchmark output and traces in `artifacts/`.
 
 Use the source note for model caches, service ports, build limits, and existing infrastructure. Do not install host packages or replace shared services unless the user authorizes provisioning.
+
+## Run on Modal
+
+Modal has no SSH host, session root, or `tmux`. Containers are ephemeral and bill per second while alive. Use the profile, environment, image, volumes, and entry script from the source note.
+
+- Edit and build on the local machine. Mount the local worktree into the container instead of fetching inside it.
+- Record the worktree's commit SHA. If the worktree is dirty, also record `git diff | sha256sum`. Store both with the run's results.
+- Run long jobs with `modal run --detach`. Write results to the source note's results volume.
+- Use `modal shell` or a sandbox only for interactive work. Stop it when the work ends.
+- At handoff, run `modal app list` and `modal container list`. Stop only the apps, containers, and sandboxes that this session started.
 
 ## Cleanup and Handoff
 
