@@ -58,18 +58,29 @@ nix run home-manager/master -- switch --flake .#work -b backup
 # Or use the Makefile shortcuts: make work | make home | make vm | make vm-arm
 ```
 
-### Alternative: Using nix-darwin (macOS only)
+### System setup: nix-darwin (macOS only)
 
-For system-wide macOS configuration:
+For system-wide macOS configuration and GUI app casks:
 
 ```bash
-# Install nix-darwin
-nix-build https://github.com/LnL7/nix-darwin/archive/master.tar.gz -A installer
-./result/bin/darwin-installer
+# First application from this flake. Use work for idhanani@macbook or home for ishandhanani@macbook.
+sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
 
-# Apply both system and home configuration
-darwin-rebuild switch --flake .#macbook
+# After the first switch, darwin-rebuild is available from the system profile.
+sudo darwin-rebuild switch --flake .#work
 ```
+
+The nix-darwin targets embed the matching Home Manager target, so `.#work` applies both system preferences and dotfiles. The standalone Home Manager targets remain available as `homeConfigurations.work` and `homeConfigurations.home`.
+
+The macOS system module manages:
+
+- Homebrew casks for Cursor, Dia, iTerm2, Raycast, and Rectangle
+- Caps Lock to Escape, fast key repeat, disabled press-and-hold, dark mode, and Dock recents off
+- Trackpad click/gesture defaults and tracking speed
+- Raycast on Cmd-Space with Spotlight hotkeys disabled
+- Cursor settings and Rectangle defaults from this repository
+
+On a machine where those apps were installed manually before Homebrew was managed, the first activation may require a one-time cask adoption or reinstall if Homebrew refuses to claim an existing `/Applications/*.app` bundle.
 
 ## Usage
 

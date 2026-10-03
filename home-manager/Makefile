@@ -1,7 +1,7 @@
 # Home Manager Makefile
 # Commands to manage Nix home-manager configuration
 
-.PHONY: help install work home vm vm-arm clean backup check
+.PHONY: help install work home darwin-work darwin-home darwin-check vm vm-arm clean backup check
 
 # Colors
 GREEN := \033[0;32m
@@ -44,6 +44,11 @@ check: ## Check if configuration builds without applying
 	@nix flake check --show-trace
 	@echo "$(GREEN)✓ Configuration check passed$(NC)"
 
+darwin-check: ## Build nix-darwin work configuration without applying
+	@echo "$(BLUE)==> Checking nix-darwin work configuration...$(NC)"
+	@nix build .#darwinConfigurations.work.system --no-link --show-trace
+	@echo "$(GREEN)✓ nix-darwin work configuration builds$(NC)"
+
 backup: ## Backup existing dotfiles
 	@echo "$(BLUE)==> Backing up existing dotfiles...$(NC)"
 	@mkdir -p "$(BACKUP_DIR)"
@@ -66,6 +71,16 @@ home: backup check ## Apply home configuration (ishandhanani@macbook)
 	@nix run home-manager/master -- switch --flake .#home -b backup
 	@echo "$(GREEN)✓ Home configuration applied successfully!$(NC)"
 	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
+
+darwin-work: darwin-check ## Apply nix-darwin + Home Manager work macOS configuration
+	@echo "$(BLUE)==> Applying nix-darwin work configuration...$(NC)"
+	@sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
+	@echo "$(GREEN)✓ nix-darwin work configuration applied successfully!$(NC)"
+
+darwin-home: ## Apply nix-darwin + Home Manager home macOS configuration
+	@echo "$(BLUE)==> Applying nix-darwin home configuration...$(NC)"
+	@sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#home
+	@echo "$(GREEN)✓ nix-darwin home configuration applied successfully!$(NC)"
 
 vm: backup check ## Apply VM configuration (auto-detects user)
 	@echo "$(BLUE)==> Applying VM configuration...$(NC)"
