@@ -101,8 +101,8 @@ in
     };
   };
 
-  system.activationScripts.spotlightHotkeys.text = ''
-    primary_user=${lib.escapeShellArg user}
+  system.activationScripts.userDefaults.text = lib.mkAfter ''
+    primary_user="${user}"
 
     echo "disabling Spotlight hotkeys..." >&2
     ${disableSymbolicHotkey 64 "{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }"}
