@@ -88,12 +88,13 @@ Use the source note for model caches, service ports, build limits, and existing 
 
 ## Run on Modal
 
-Modal has no SSH host, session root, or `tmux`. Containers are ephemeral and bill per second while alive. Use the profile, environment, image, volumes, and entry script from the source note.
+Use Modal to burst tests and benchmarks. Do not use it as a persistent sandbox or development VM. Modal has no SSH host, session root, or `tmux`. Containers are ephemeral and bill per second while alive, also when idle. Use the profile, environment, image, volumes, and entry script from the source note.
 
-- Edit and build on the local machine. Mount the local worktree into the container instead of fetching inside it.
+- Edit and build on the local machine. Mount the local worktree into the container instead of fetching inside it. A dirty worktree is permitted for fast iteration.
 - Record the worktree's commit SHA. If the worktree is dirty, also record `git diff | sha256sum`. Store both with the run's results.
+- Request the smallest GPU type and count that tests the change. Set a function `timeout`.
 - Run long jobs with `modal run --detach`. Write results to the source note's results volume.
-- Use `modal shell` or a sandbox only for interactive work. Stop it when the work ends.
+- Start a long-lived sandbox or an interactive GPU shell only when the user asks for one. Set `timeout` and `idle_timeout`, and stop it when the work ends.
 - At handoff, run `modal app list` and `modal container list`. Stop only the apps, containers, and sandboxes that this session started.
 
 ## Cleanup and Handoff
