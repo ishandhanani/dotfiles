@@ -12,7 +12,7 @@ let
 in
 {
   system.primaryUser = user;
-  system.stateVersion = 7;
+  system.stateVersion = 6;
   system.configurationRevision = inputs.self.rev or inputs.self.dirtyRev or null;
 
   users.users.${user}.home = homeDirectory;

@@ -1,6 +1,31 @@
 # dotfiles
 
-using home-manager and nix
+Personal dotfiles managed with Home Manager and Nix.
+
+## macOS
+
+The macOS setup lives under `home-manager/` and has two layers:
+
+- Home Manager manages the user shell, CLI packages, git/vim/zsh config, Cursor settings, and Rectangle defaults.
+- nix-darwin manages system preferences like keyboard repeat, Caps Lock as Escape, dark mode, Dock/Finder settings, trackpad settings, Raycast on Cmd-Space, and disabled Spotlight hotkeys.
+
+Useful commands:
+
+```bash
+cd home-manager
+make darwin-check
+sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
+sudo darwin-rebuild switch --flake .#work
+```
+
+Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo.
+
+```bash
+cd home-manager
+nix run .#install-homebrew
+scripts/install-mac-apps.sh --list
+scripts/install-mac-apps.sh --dry-run
+```
 
 ## agents
 

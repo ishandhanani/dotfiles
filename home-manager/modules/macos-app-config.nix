@@ -35,24 +35,24 @@ in
 
         case "$kind" in
           bool)
-            defaults write "$domain" "$key" -bool "$(entry '.value.bool')"
+            run defaults write "$domain" "$key" -bool "$(entry '.value.bool')"
             ;;
           int)
-            defaults write "$domain" "$key" -int "$(entry '.value.int')"
+            run defaults write "$domain" "$key" -int "$(entry '.value.int')"
             ;;
           float)
-            defaults write "$domain" "$key" -float "$(entry '.value.float')"
+            run defaults write "$domain" "$key" -float "$(entry '.value.float')"
             ;;
           string)
-            defaults write "$domain" "$key" -string "$(entry '.value.string')"
+            run defaults write "$domain" "$key" -string "$(entry '.value.string')"
             ;;
           keyCombo)
-            defaults write "$domain" "$key" -dict \
+            run defaults write "$domain" "$key" -dict \
               keyCode -int "$(entry '.value.keyCode')" \
               modifierFlags -int "$(entry '.value.modifierFlags')"
             ;;
           emptyDict)
-            defaults write "$domain" "$key" -dict
+            run defaults write "$domain" "$key" -dict
             ;;
         esac
       done

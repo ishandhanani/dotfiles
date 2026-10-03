@@ -13,11 +13,39 @@ DRY_RUN=0
 LIST=0
 DOWNLOAD_ONLY=0
 KEEP_DOWNLOADS=0
+CLEANUP_DIRS=()
+CLEANUP_FILES=()
+MOUNT_DIRS=()
+DOWNLOADED_ARCHIVE=""
+FETCHED_METADATA_FILE=""
+SELECTED_URL=""
+SELECTED_SHA=""
 
 info() { printf '\033[1;34m=> %s\033[0m\n' "$*" >&2; }
 ok() { printf '\033[1;32m   %s\033[0m\n' "$*" >&2; }
 warn() { printf '\033[1;33m!! %s\033[0m\n' "$*" >&2; }
 error() { printf '\033[0;31m!! %s\033[0m\n' "$*" >&2; }
+
+cleanup_all() {
+  local mount dir file
+
+  set +u
+
+  for mount in "${MOUNT_DIRS[@]}"; do
+    hdiutil detach "$mount" >/dev/null 2>&1 || true
+    rmdir "$mount" >/dev/null 2>&1 || true
+  done
+
+  for dir in "${CLEANUP_DIRS[@]}"; do
+    rm -rf "$dir"
+  done
+
+  for file in "${CLEANUP_FILES[@]}"; do
+    rm -f "$file"
+  done
+}
+
+trap cleanup_all EXIT
 
 usage() {
   cat <<'EOF'
@@ -124,9 +152,166 @@ metadata_url() {
   printf 'https://formulae.brew.sh/api/cask/%s.json\n' "$1"
 }
 
-resolve_download_url() {
+macos_codename() {
+  local version major minor
+
+  version="$(sw_vers -productVersion)"
+  major="${version%%.*}"
+
+  case "$major" in
+    27)
+      printf 'golden_gate\n'
+      ;;
+    26)
+      printf 'tahoe\n'
+      ;;
+    15)
+      printf 'sequoia\n'
+      ;;
+    14)
+      printf 'sonoma\n'
+      ;;
+    13)
+      printf 'ventura\n'
+      ;;
+    12)
+      printf 'monterey\n'
+      ;;
+    11)
+      printf 'big_sur\n'
+      ;;
+    10)
+      minor="${version#10.}"
+      minor="${minor%%.*}"
+      case "$minor" in
+        15)
+          printf 'catalina\n'
+          ;;
+        14)
+          printf 'mojave\n'
+          ;;
+        13)
+          printf 'high_sierra\n'
+          ;;
+        12)
+          printf 'sierra\n'
+          ;;
+        *)
+          return 1
+          ;;
+      esac
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+variation_candidates() {
+  local arch codename
+
+  arch="$(uname -m)"
+  codename="$(macos_codename || true)"
+
+  case "$arch" in
+    arm64)
+      if [[ -n "$codename" ]]; then
+        printf 'arm64_%s\n' "$codename"
+      fi
+      printf 'arm64\n'
+      ;;
+    x86_64)
+      if [[ -n "$codename" ]]; then
+        printf '%s\n' "$codename"
+        printf 'x86_64_%s\n' "$codename"
+        printf 'intel_%s\n' "$codename"
+      fi
+      printf 'x86_64\n'
+      printf 'intel\n'
+      ;;
+    *)
+      if [[ -n "$codename" ]]; then
+        printf '%s_%s\n' "$arch" "$codename"
+      fi
+      printf '%s\n' "$arch"
+      ;;
+  esac
+}
+
+extract_metadata_value() {
+  local metadata_file="$1"
+  local path="$2"
+  local value
+
+  if ! value="$(/usr/bin/plutil -extract "$path" raw -o - "$metadata_file" 2>/dev/null)"; then
+    return 1
+  fi
+
+  if [[ -z "$value" || "$value" == "null" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$value"
+}
+
+fetch_cask_metadata() {
   local cask="$1"
-  curl -fsSL "$(metadata_url "$cask")" | /usr/bin/plutil -extract url raw -o - -
+  local metadata_file
+
+  metadata_file="$(mktemp "${TMPDIR:-/tmp}/mac-app-cask.XXXXXX")"
+  CLEANUP_FILES+=("$metadata_file")
+  curl -fsSL "$(metadata_url "$cask")" -o "$metadata_file"
+  FETCHED_METADATA_FILE="$metadata_file"
+}
+
+select_cask_metadata() {
+  local metadata_file="$1"
+  local key url sha
+
+  SELECTED_URL=""
+  SELECTED_SHA=""
+
+  while IFS= read -r key; do
+    if url="$(extract_metadata_value "$metadata_file" "variations.${key}.url")"; then
+      sha="$(extract_metadata_value "$metadata_file" "variations.${key}.sha256" || printf 'no_check')"
+      SELECTED_URL="$url"
+      SELECTED_SHA="$sha"
+      return 0
+    fi
+  done < <(variation_candidates)
+
+  if url="$(extract_metadata_value "$metadata_file" url)"; then
+    sha="$(extract_metadata_value "$metadata_file" sha256 || printf 'no_check')"
+    SELECTED_URL="$url"
+    SELECTED_SHA="$sha"
+    return 0
+  fi
+
+  error "Could not resolve a download URL from cask metadata"
+  return 1
+}
+
+verify_archive() {
+  local name="$1"
+  local archive="$2"
+  local expected="$3"
+  local actual
+
+  if [[ "$expected" == "no_check" ]]; then
+    warn "No SHA-256 published for ${name}; skipping verification"
+    return 0
+  fi
+
+  require_command shasum
+  actual="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
+  if [[ "$actual" != "$expected" ]]; then
+    error "SHA-256 mismatch for ${name}"
+    error "Expected: ${expected}"
+    error "Actual:   ${actual}"
+    return 1
+  fi
+
+  ok "Verified ${name} SHA-256"
 }
 
 find_app_bundle() {
@@ -136,6 +321,7 @@ find_app_bundle() {
 
   found="$(find "$root" -maxdepth 4 -name "$bundle" -type d -print -quit)"
   if [[ -z "$found" ]]; then
+    error "Could not find ${bundle} under ${root}"
     return 1
   fi
 
@@ -173,15 +359,20 @@ download_archive() {
   local name="$1"
   local cask="$2"
   local kind="$3"
-  local url archive
+  local metadata_file url sha archive
 
-  url="$(resolve_download_url "$cask")"
+  fetch_cask_metadata "$cask"
+  metadata_file="$FETCHED_METADATA_FILE"
+  select_cask_metadata "$metadata_file"
+  url="$SELECTED_URL"
+  sha="$SELECTED_SHA"
   archive="${DOWNLOAD_DIR%/}/${cask}.${kind}"
 
   info "Downloading ${name}"
   mkdir -p "$DOWNLOAD_DIR"
   curl -fL --progress-bar -o "$archive" "$url"
-  printf '%s\n' "$archive"
+  verify_archive "$name" "$archive" "$sha"
+  DOWNLOADED_ARCHIVE="$archive"
 }
 
 install_zip() {
@@ -190,17 +381,13 @@ install_zip() {
   local extract_dir source
 
   extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-zip.XXXXXX")"
-  cleanup_zip() {
-    rm -rf "$extract_dir"
-  }
-  trap cleanup_zip RETURN
+  CLEANUP_DIRS+=("$extract_dir")
 
   ditto -x -k "$archive" "$extract_dir"
   source="$(find_app_bundle "$extract_dir" "$bundle")"
   copy_app "$source" "$bundle"
 
-  cleanup_zip
-  trap - RETURN
+  rm -rf "$extract_dir"
 }
 
 install_dmg() {
@@ -209,18 +396,14 @@ install_dmg() {
   local mount_dir source
 
   mount_dir="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-dmg.XXXXXX")"
-  cleanup_dmg() {
-    hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
-    rmdir "$mount_dir" >/dev/null 2>&1 || true
-  }
-  trap cleanup_dmg RETURN
+  MOUNT_DIRS+=("$mount_dir")
 
   hdiutil attach "$archive" -nobrowse -readonly -mountpoint "$mount_dir" >/dev/null
   source="$(find_app_bundle "$mount_dir" "$bundle")"
   copy_app "$source" "$bundle"
 
-  cleanup_dmg
-  trap - RETURN
+  hdiutil detach "$mount_dir" >/dev/null
+  rmdir "$mount_dir"
 }
 
 install_archive() {
@@ -287,15 +470,13 @@ fi
 
 if [[ "$KEEP_DOWNLOADS" != 1 ]]; then
   DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-downloads.XXXXXX")"
-  cleanup_downloads() {
-    rm -rf "$DOWNLOAD_DIR"
-  }
-  trap cleanup_downloads EXIT
+  CLEANUP_DIRS+=("$DOWNLOAD_DIR")
 fi
 
 for i in "${MISSING_INDEXES[@]}"; do
   name="${NAMES[$i]}"
-  archive="$(download_archive "$name" "${CASKS[$i]}" "${KINDS[$i]}")"
+  download_archive "$name" "${CASKS[$i]}" "${KINDS[$i]}"
+  archive="$DOWNLOADED_ARCHIVE"
 
   if [[ "$DOWNLOAD_ONLY" == 1 ]]; then
     ok "Downloaded ${name}: ${archive}"
