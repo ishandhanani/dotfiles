@@ -17,11 +17,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Homebrew bootstrap for nix-darwin's declarative cask management.
-    nix-homebrew.url = "github:zhaofengli/nix-homebrew/5108f0846cde2080aaeb1c7b08e3bd7d27f33b57";
   };
 
-  outputs = { self, nixpkgs, home-manager, nix-darwin, nix-homebrew, ... }@inputs:
+  outputs = { self, nixpkgs, home-manager, nix-darwin, ... }@inputs:
     let
       # System types
       darwinSystem = "aarch64-darwin";  # Apple Silicon
@@ -43,9 +41,7 @@
             inherit inputs user homeDirectory;
           };
           modules = [
-            nix-homebrew.darwinModules.nix-homebrew
             ./darwin/system.nix
-            ./darwin/homebrew.nix
             home-manager.darwinModules.home-manager
             {
               home-manager.useUserPackages = true;

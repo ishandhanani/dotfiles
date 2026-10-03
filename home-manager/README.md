@@ -60,7 +60,7 @@ nix run home-manager/master -- switch --flake .#work -b backup
 
 ### System setup: nix-darwin (macOS only)
 
-For system-wide macOS configuration and GUI app casks:
+For system-wide macOS configuration:
 
 ```bash
 # First application from this flake. Use work for idhanani@macbook or home for ishandhanani@macbook.
@@ -74,13 +74,12 @@ The nix-darwin targets embed the matching Home Manager target, so `.#work` appli
 
 The macOS system module manages:
 
-- Homebrew casks for Cursor, Dia, iTerm2, Raycast, and Rectangle
 - Caps Lock to Escape, fast key repeat, disabled press-and-hold, dark mode, and Dock recents off
 - Trackpad click/gesture defaults and tracking speed
 - Raycast on Cmd-Space with Spotlight hotkeys disabled
 - Cursor settings and Rectangle defaults from this repository
 
-On a machine where those apps were installed manually before Homebrew was managed, the first activation may require a one-time cask adoption or reinstall if Homebrew refuses to claim an existing `/Applications/*.app` bundle.
+GUI apps stay outside nix-darwin ownership for now. Install Cursor, Dia, iTerm2, Raycast, and Rectangle manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap.
 
 ## Usage
 
