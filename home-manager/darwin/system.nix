@@ -24,10 +24,6 @@ in
   # daemon, /etc/nix/nix.conf, or Nix upgrades.
   nix.enable = false;
 
-  environment.systemPackages = with pkgs; [
-    vim
-  ];
-
   system.keyboard = {
     enableKeyMapping = true;
     remapCapsLockToEscape = true;
