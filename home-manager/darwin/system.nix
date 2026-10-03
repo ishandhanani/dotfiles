@@ -45,7 +45,21 @@ in
     };
 
     dock = {
+      magnification = true;
       show-recents = false;
+      tilesize = 47;
+    };
+
+    finder = {
+      ShowExternalHardDrivesOnDesktop = true;
+      ShowHardDrivesOnDesktop = false;
+      ShowRemovableMediaOnDesktop = true;
+    };
+
+    menuExtraClock = {
+      ShowAMPM = true;
+      ShowDate = 0;
+      ShowDayOfWeek = true;
     };
 
     trackpad = {
@@ -78,6 +92,16 @@ in
         raycastPreferredWindowMode = "default";
         raycastShouldFollowSystemAppearance = true;
       };
+    };
+
+    WindowManager = {
+      EnableTiledWindowMargins = false;
+      EnableTilingByEdgeDrag = false;
+      EnableTilingOptionAccelerator = false;
+      EnableTopTilingByEdgeDrag = false;
+      HideDesktop = true;
+      StageManagerHideWidgets = false;
+      StandardHideWidgets = true;
     };
   };
 

@@ -75,11 +75,12 @@ The nix-darwin targets embed the matching Home Manager target, so `.#work` appli
 The macOS system module manages:
 
 - Caps Lock to Escape, fast key repeat, disabled press-and-hold, dark mode, and Dock recents off
+- Dock size/magnification, Finder desktop media icons, menu bar clock format, and macOS window tiling/widget toggles
 - Trackpad click/gesture defaults and tracking speed
 - Raycast on Cmd-Space with Spotlight hotkeys disabled
 - Cursor settings and Rectangle defaults from this repository
 
-GUI apps stay outside nix-darwin ownership for now. Install Cursor, Dia, iTerm2, Raycast, and Rectangle manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap.
+GUI apps stay outside nix-darwin ownership for now. Install Cursor, Dia, iTerm2, Raycast, and Rectangle manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads app bundles directly without requiring Homebrew.
 
 ## Usage
 
