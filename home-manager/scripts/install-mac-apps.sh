@@ -146,12 +146,9 @@ ensure_brew() {
   exit 1
 }
 
-ensure_brew
-
-MISSING=0
+MISSING_INDEXES=()
 for i in "${!NAMES[@]}"; do
   name="${NAMES[$i]}"
-  token="${TOKENS[$i]}"
   bundle="${BUNDLES[$i]}"
 
   if app_exists "$bundle"; then
@@ -159,7 +156,19 @@ for i in "${!NAMES[@]}"; do
     continue
   fi
 
-  MISSING=1
+  MISSING_INDEXES+=("$i")
+done
+
+if [[ "${#MISSING_INDEXES[@]}" -eq 0 ]]; then
+  ok "All tracked apps are present"
+  exit 0
+fi
+
+ensure_brew
+
+for i in "${MISSING_INDEXES[@]}"; do
+  name="${NAMES[$i]}"
+  token="${TOKENS[$i]}"
 
   if [[ "$DRY_RUN" == 1 ]]; then
     info "Would install $name (brew install --cask $token)"
@@ -170,7 +179,3 @@ for i in "${!NAMES[@]}"; do
   "$BREW_BIN" install --cask "$token"
   ok "$name installed"
 done
-
-if [[ "$DRY_RUN" == 1 && "$MISSING" == 0 ]]; then
-  ok "Dry run: nothing to install"
-fi
