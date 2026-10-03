@@ -25,6 +25,9 @@ in
       "$HOME/.local/bin"
       "$HOME/.local/go/bin"
       "$HOME/go/bin"
+    ] ++ lib.optionals isDarwin [
+      "/opt/homebrew/bin"
+      "/opt/homebrew/sbin"
     ];
   };
   

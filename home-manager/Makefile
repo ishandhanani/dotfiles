@@ -1,7 +1,7 @@
 # Home Manager Makefile
 # Commands to manage Nix home-manager configuration
 
-.PHONY: help install work home darwin-work darwin-home darwin-check vm vm-arm clean backup check
+.PHONY: help install install-homebrew work home darwin-work darwin-home darwin-check vm vm-arm clean backup check
 
 # Colors
 GREEN := \033[0;32m
@@ -38,6 +38,10 @@ install: ## Install Nix using the Determinate installer (flakes on by default)
 	else \
 		echo "$(GREEN)✓ Nix is already installed (Determinate enables flakes by default)$(NC)"; \
 	fi
+
+install-homebrew: ## Install Homebrew with the official installer (macOS only)
+	@echo "$(BLUE)==> Installing Homebrew with the official installer...$(NC)"
+	@nix run .#install-homebrew
 
 check: ## Check if configuration builds without applying
 	@echo "$(BLUE)==> Checking configuration...$(NC)"

@@ -83,5 +83,10 @@
         ${darwinSystem} = nixpkgs.legacyPackages.${darwinSystem}.nixpkgs-fmt;
         ${linuxSystem} = nixpkgs.legacyPackages.${linuxSystem}.nixpkgs-fmt;
       };
+
+      apps.${darwinSystem}.install-homebrew = {
+        type = "app";
+        program = "${./scripts/install-homebrew.sh}";
+      };
     };
 }
