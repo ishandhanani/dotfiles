@@ -7,10 +7,10 @@
 
 set -euo pipefail
 
-NAMES=("Dia" "iTerm2" "Raycast" "Rectangle" "Cursor")
-CASKS=("thebrowsercompany-dia" "iterm2" "raycast" "rectangle" "cursor")
-BUNDLES=("Dia.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app")
-KINDS=("zip" "zip" "dmg" "dmg" "zip")
+NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor")
+CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor")
+BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app")
+KINDS=("dmg" "zip" "dmg" "dmg" "zip")
 
 APP_DIR="/Applications"
 DOWNLOAD_DIR="${HOME}/Downloads/mac-apps"
