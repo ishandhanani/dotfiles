@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Opt-in bootstrap for common macOS GUI apps.
-#
-# This does not require Homebrew. It uses Homebrew's public cask JSON as a
-# metadata feed for current vendor download URLs, then downloads and installs
-# ZIP/DMG app bundles directly.
 
 set -euo pipefail
 

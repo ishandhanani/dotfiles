@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# One-shot Homebrew bootstrap.
-#
-# Nix only launches the official installer here. Homebrew remains user-owned and
-# is not managed by nix-darwin or Home Manager.
 
 set -euo pipefail
 
