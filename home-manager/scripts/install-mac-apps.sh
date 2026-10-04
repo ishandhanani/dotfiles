@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor")
-CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor")
-BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app")
-KINDS=("dmg" "zip" "dmg" "dmg" "zip")
+NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor" "Tailscale" "Ghostty" "bb")
+CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor" "tailscale-app" "ghostty" "bb")
+BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app" "Tailscale.app" "Ghostty.app" "bb.app")
+KINDS=("dmg" "zip" "dmg" "dmg" "zip" "pkg" "dmg" "dmg")
 
 APP_DIR="/Applications"
 DOWNLOAD_DIR="${HOME}/Downloads/mac-apps"
@@ -406,6 +406,18 @@ install_dmg() {
   rmdir "$mount_dir"
 }
 
+install_pkg() {
+  local archive="$1"
+  local bundle="$2"
+
+  info "Installing ${bundle} with macOS installer"
+  sudo /usr/sbin/installer -pkg "$archive" -target /
+  if ! app_location "$bundle" >/dev/null; then
+    error "Installer completed, but ${bundle} was not found"
+    return 1
+  fi
+}
+
 install_archive() {
   local archive="$1"
   local kind="$2"
@@ -417,6 +429,9 @@ install_archive() {
       ;;
     dmg)
       install_dmg "$archive" "$bundle"
+      ;;
+    pkg)
+      install_pkg "$archive" "$bundle"
       ;;
     *)
       error "Unsupported archive kind: $kind"
@@ -461,6 +476,7 @@ require_command curl
 if [[ "$DOWNLOAD_ONLY" != 1 ]]; then
   require_command ditto
   require_command hdiutil
+  require_command /usr/sbin/installer
 fi
 
 if [[ ! -x /usr/bin/plutil ]]; then

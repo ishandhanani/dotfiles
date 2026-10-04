@@ -82,7 +82,7 @@ The macOS system module manages:
 - Raycast on Cmd-Space with Spotlight hotkeys disabled
 - Cursor settings and Rectangle defaults from this repository
 
-GUI apps stay outside nix-darwin ownership for now. Install Cursor, Google Chrome, iTerm2, Raycast, and Rectangle manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads app bundles directly without requiring Homebrew.
+GUI apps stay outside nix-darwin ownership for now. Install Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, and bb manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads current app installers directly without requiring Homebrew.
 
 Homebrew is also outside nix-darwin ownership. To bootstrap it through Nix without making Nix manage it:
 
