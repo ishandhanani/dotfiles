@@ -41,7 +41,7 @@ install: ## Install Nix using the Determinate installer (flakes on by default)
 
 install-homebrew: ## Install Homebrew with the official installer (macOS only)
 	@echo "$(BLUE)==> Installing Homebrew with the official installer...$(NC)"
-	@nix run .#install-homebrew
+	@./scripts/install-homebrew.sh
 
 check: ## Check if configuration builds without applying
 	@echo "$(BLUE)==> Checking configuration...$(NC)"

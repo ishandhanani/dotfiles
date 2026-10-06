@@ -87,12 +87,12 @@ The macOS system module manages:
 
 GUI apps stay outside nix-darwin ownership for now. Install Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, and bb manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads current app installers directly without requiring Homebrew.
 
-Homebrew is also outside nix-darwin ownership. To bootstrap it through Nix without making Nix manage it:
+Homebrew is also outside nix-darwin ownership. To bootstrap it with the official installer:
 
 ```bash
-nix run .#install-homebrew
-# or
 make install-homebrew
+# or
+scripts/install-homebrew.sh
 ```
 
 ## Usage

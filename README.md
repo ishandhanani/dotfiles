@@ -23,7 +23,7 @@ Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo
 
 ```bash
 cd home-manager
-nix run .#install-homebrew
+make install-homebrew
 make darwin-apps-list
 make darwin-apps-dry-run
 make darwin-apps-install
