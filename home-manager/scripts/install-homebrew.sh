@@ -67,6 +67,17 @@ fi
 info "Installing Homebrew with the official installer"
 info "Installer source: ${INSTALL_URL}"
 
+if ! id -Gn | tr ' ' '\n' | grep -qx admin; then
+  error "Homebrew needs an administrator account, but $(whoami) is not in the admin group"
+  exit 1
+fi
+
+info "Checking sudo access before running Homebrew"
+if ! sudo -v; then
+  error "sudo authentication failed; Homebrew cannot install without admin access"
+  exit 1
+fi
+
 install_script="$(curl -fsSL "$INSTALL_URL")"
 if [[ "$INTERACTIVE" -eq 1 ]]; then
   /bin/bash -c "$install_script"
