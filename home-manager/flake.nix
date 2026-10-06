@@ -11,6 +11,10 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    brev-cli = {
+      url = "github:brevdev/brev-cli/idhanani/feat-brev-ssh-config-env-var";
+      flake = false;
+    };
   };
 
   outputs = { nixpkgs, home-manager, nix-darwin, ... }@inputs:
@@ -27,7 +31,7 @@
       homeConfigurations.default = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
         modules = [ ./home.nix ];
-        extraSpecialArgs = localAccount;
+        extraSpecialArgs = localAccount // { brevSource = inputs.brev-cli; };
       };
 
       darwinConfigurations.macos = nix-darwin.lib.darwinSystem {
