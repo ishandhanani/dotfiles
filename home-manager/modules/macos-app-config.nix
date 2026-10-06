@@ -13,8 +13,6 @@ in
   config = mkIf pkgs.stdenv.isDarwin {
     home.file."Library/Application Support/Cursor/User/settings.json".source = ../../cursor/settings.json;
     xdg.configFile."ghostty/config".text = ghosttyConfig;
-    xdg.configFile."ghostty/themes/dotfiles-dark".source = ../../ghostty/themes/dotfiles-dark;
-    xdg.configFile."ghostty/themes/dotfiles-light".source = ../../ghostty/themes/dotfiles-light;
 
     home.activation.rectangleDefaults = hm.dag.entryAfter [ "writeBoundary" ] ''
       export PATH="${pkgs.coreutils}/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"

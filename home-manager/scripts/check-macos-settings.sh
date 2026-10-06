@@ -178,8 +178,8 @@ check_chrome_extension_policy
 
 info "App configs"
 check_file_contains "Ghostty config" "${HOME}/.config/ghostty/config" "working-directory = ${HOME}"
-check_file "Ghostty dark theme" "${HOME}/.config/ghostty/themes/dotfiles-dark"
-check_file "Ghostty light theme" "${HOME}/.config/ghostty/themes/dotfiles-light"
+check_file_contains "Ghostty dark background" "${HOME}/.config/ghostty/config" "background = #000000"
+check_file_contains "Ghostty dark foreground" "${HOME}/.config/ghostty/config" "foreground = #bbbbbb"
 check_rectangle_defaults
 
 info "Tracked GUI apps"
