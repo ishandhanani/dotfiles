@@ -7,7 +7,7 @@ Personal dotfiles managed with Home Manager and Nix.
 The macOS setup lives under `home-manager/` and has two layers:
 
 - Home Manager manages the user shell, CLI packages, git/vim/zsh config, Cursor settings, and Rectangle defaults.
-- nix-darwin manages system preferences like keyboard repeat, Caps Lock as Escape, dark mode, Dock/Finder settings, trackpad settings, Raycast on Cmd-Space, and disabled Spotlight hotkeys.
+- nix-darwin manages system preferences like keyboard repeat, Caps Lock as Escape, dark mode, Dock/Finder settings, trackpad settings, Raycast on Cmd-Space, disabled Spotlight hotkeys, and Chrome extension policy.
 
 Useful commands:
 
@@ -21,7 +21,7 @@ make darwin-status
 
 Some keyboard and pointer defaults, including key repeat and mouse speed, may require a restart after the first nix-darwin switch before `make darwin-status` reflects the applied state.
 
-Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo. The app bootstrap covers Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, and bb.
+Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo. The app bootstrap covers Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password.
 
 ```bash
 cd home-manager

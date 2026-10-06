@@ -97,6 +97,27 @@ check_spotlight_hotkey_disabled() {
   fi
 }
 
+check_chrome_extension_policy() {
+  local extensions_file policy i id name
+
+  extensions_file="$(cd "$(dirname "$0")/.." && pwd)/chrome/extensions.json"
+  if ! policy="$(/usr/bin/defaults read /Library/Preferences/com.google.Chrome ExtensionSettings 2>/dev/null)"; then
+    bad "Chrome extension policy: expected ExtensionSettings in /Library/Preferences/com.google.Chrome"
+    return
+  fi
+
+  i=0
+  while id="$(/usr/bin/plutil -extract "${i}.id" raw -o - "$extensions_file" 2>/dev/null)"; do
+    name="$(/usr/bin/plutil -extract "${i}.name" raw -o - "$extensions_file" 2>/dev/null || printf '%s' "$id")"
+    if printf '%s\n' "$policy" | /usr/bin/grep -q "$id"; then
+      ok "Chrome extension policy includes ${name}"
+    else
+      bad "Chrome extension policy missing ${name} (${id})"
+    fi
+    i=$((i + 1))
+  done
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   bad "This check is intended for macOS only"
   exit "$failures"
@@ -121,6 +142,9 @@ info "Raycast and Spotlight"
 check_string "Raycast hotkey" "$(read_default com.raycast.macos raycastGlobalHotkey)" "Command-49"
 check_spotlight_hotkey_disabled 64
 check_spotlight_hotkey_disabled 65
+
+info "Chrome extensions"
+check_chrome_extension_policy
 
 info "Tracked GUI apps"
 "$(dirname "$0")/install-mac-apps.sh" --list

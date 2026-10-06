@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor" "Tailscale" "Ghostty" "bb")
-CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor" "tailscale-app" "ghostty" "bb")
-BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app" "Tailscale.app" "Ghostty.app" "bb.app")
-KINDS=("dmg" "zip" "dmg" "dmg" "zip" "pkg" "dmg" "dmg")
+NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor" "Tailscale" "Ghostty" "bb" "1Password")
+CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor" "tailscale-app" "ghostty" "bb" "1password")
+BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app" "Tailscale.app" "Ghostty.app" "bb.app" "1Password.app")
+KINDS=("dmg" "zip" "dmg" "dmg" "zip" "pkg" "dmg" "dmg" "zip")
 
 APP_DIR="/Applications"
 DOWNLOAD_DIR="${HOME}/Downloads/mac-apps"

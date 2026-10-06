@@ -9,6 +9,17 @@ let
         defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys \
         -dict-add ${toString id} ${encodedValue}
     '';
+  chromeExtensions = builtins.fromJSON (builtins.readFile ../chrome/extensions.json);
+  chromeExtensionUpdateUrl = "https://clients2.google.com/service/update2/crx";
+  chromeExtensionSettings = builtins.listToAttrs (map
+    (extension: {
+      name = extension.id;
+      value = {
+        installation_mode = "normal_installed";
+        update_url = chromeExtensionUpdateUrl;
+      };
+    })
+    chromeExtensions);
 in
 {
   system.primaryUser = user;
@@ -87,6 +98,12 @@ in
         raycastGlobalHotkey = "Command-49";
         raycastPreferredWindowMode = "default";
         raycastShouldFollowSystemAppearance = true;
+      };
+    };
+
+    CustomSystemPreferences = {
+      "/Library/Preferences/com.google.Chrome" = {
+        ExtensionSettings = chromeExtensionSettings;
       };
     };
 
