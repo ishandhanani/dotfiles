@@ -3,17 +3,21 @@
 {
   programs.ssh = {
     enable = true;
+    enableDefaultConfig = false;
     includes = [
       "~/.ssh/config.local"
       "~/.brev/ssh_config"
     ];
     matchBlocks = {
       "*" = {
-        extraOptions = {
-          "AddKeysToAgent" = "yes";
-          "ServerAliveInterval" = "60";
-          "ServerAliveCountMax" = "3";
-        } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+        forwardAgent = false;
+        addKeysToAgent = "yes";
+        compression = false;
+        serverAliveInterval = 60;
+        serverAliveCountMax = 3;
+        hashKnownHosts = false;
+        userKnownHostsFile = "~/.ssh/known_hosts";
+        extraOptions = lib.optionalAttrs pkgs.stdenv.isDarwin {
           "UseKeychain" = "yes";
         };
         controlMaster = "auto";

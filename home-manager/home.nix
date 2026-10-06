@@ -1,7 +1,6 @@
-{ config, pkgs, lib, user, homeDirectory, ... }:
+{ pkgs, lib, user, homeDirectory, sourceDirectory, ... }:
 
 let
-  isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
 in
 {
@@ -15,8 +14,8 @@ in
     # Global shell aliases available to all shells
     shellAliases = {
       # Quick edits
-      edit-home = "$EDITOR ~/.config/home-manager/home.nix";
-      rebuild = "home-manager switch";
+      edit-home = "$EDITOR ${lib.escapeShellArg "${sourceDirectory}/home-manager/home.nix"}";
+      rebuild = "make -C ${lib.escapeShellArg sourceDirectory} apply";
       v = "nvim";
     };
     
@@ -41,6 +40,7 @@ in
     ./modules/bash.nix
     ./modules/ssh.nix
     ./modules/neovim.nix
+    ./modules/macos-app-config.nix
   ];
   
   # Unified packages with platform-specific additions

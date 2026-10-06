@@ -2,14 +2,17 @@
 
 # AI agent CLIs that are distributed outside nixpkgs
 
+let
+  darwinSystemPath = lib.optionalString pkgs.stdenv.isDarwin ":/usr/bin:/bin:/usr/sbin:/sbin";
+in
 {
   home.activation.installAgentCLIs = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin:$PATH"
+    export PATH="$HOME/.local/bin:${pkgs.coreutils}/bin:${pkgs.curl}/bin:${pkgs.gzip}/bin:${pkgs.gnutar}/bin:${pkgs.git}/bin${darwinSystemPath}:$PATH"
     export CI=1
     set -eo pipefail
 
     INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
+    run mkdir -p "$INSTALL_DIR"
 
     install_claude() {
       if command -v claude >/dev/null 2>&1; then
@@ -28,11 +31,21 @@
       fi
 
       echo "📦 Installing Devin..."
-      curl -fsSL https://cli.devin.ai/install.sh | ${pkgs.bash}/bin/bash
+      if curl -fsSL https://cli.devin.ai/install.sh | ${pkgs.bash}/bin/bash; then
+        return 0
+      fi
+
+      if command -v devin >/dev/null 2>&1; then
+        echo "Devin binary installed; skipping interactive setup"
+        return 0
+      fi
+
+      echo "Devin installer failed"
+      return 1
     }
 
     install_cursor() {
-      if command -v cursor >/dev/null 2>&1; then
+      if command -v cursor-agent >/dev/null 2>&1; then
         echo "✅ Cursor already installed, skipping"
         return 0
       fi
@@ -111,10 +124,14 @@
       echo "✅ Codex $version installed"
     }
 
-    install_claude
-    install_devin
-    install_cursor
-    install_codex
+    if [[ -n "''${DRY_RUN:-}" ]]; then
+      echo "Would install missing agent CLIs"
+    else
+      install_claude
+      install_devin
+      install_cursor
+      install_codex
+    fi
 
     echo "✅ Agent CLIs check complete"
   '';

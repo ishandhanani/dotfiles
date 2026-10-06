@@ -1,94 +1,41 @@
 {
-  description = "Ishan's minimal Home Manager configuration";
+  description = "Ishan's dotfiles and macOS setup";
 
   inputs = {
-    # Nixpkgs
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    
-    # Home Manager
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/nix-darwin-25.11";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, ... }@inputs:
+  outputs = { nixpkgs, home-manager, nix-darwin, ... }@inputs:
     let
-      # System types
-      darwinSystem = "aarch64-darwin";  # Apple Silicon
-      linuxSystem = "x86_64-linux";
-    in
-    {
-      # Home Manager configurations
-      homeConfigurations = {
-        # macOS configuration
-        "home" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${darwinSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "ishandhanani";
-            homeDirectory = "/Users/ishandhanani";
-          };
-        };
-
-        "work" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${darwinSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "idhanani";
-            homeDirectory = "/Users/idhanani";
-          };
-        };
-        
-        "brev-vm" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ubuntu";
-            homeDirectory = "/home/ubuntu";
-          };
-        };
-
-        "brev-vm-gpu" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];
-          extraSpecialArgs = {
-            user = "nvidia";
-            homeDirectory = "/home/nvidia";
-          };
-        };
-
-        "simbox" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ishan";
-            homeDirectory = "/home/ishan";
-          };
-        };
-        
-        "work-desktop" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${linuxSystem};
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "idhanani";
-            homeDirectory = "/home/idhanani";
-          };
-        };
-
-        "brev-vm-arm" = home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages."aarch64-linux";
-          modules = [ ./home.nix ];  # Use the same file with conditionals
-          extraSpecialArgs = {
-            user = "ubuntu";
-            homeDirectory = "/home/ubuntu";
-          };
-        };
+      # Make supplies the local account and checkout; dependencies stay locked.
+      user = builtins.getEnv "DOTFILES_USER";
+      homeDirectory = builtins.getEnv "DOTFILES_HOME";
+      sourceDirectory = builtins.getEnv "DOTFILES_ROOT";
+      system = builtins.currentSystem;
+      pkgs = nixpkgs.legacyPackages.${system};
+      localAccount = assert user != "" && user != "root" && homeDirectory != "" && sourceDirectory != "";
+        { inherit user homeDirectory sourceDirectory; };
+    in {
+      homeConfigurations.default = home-manager.lib.homeManagerConfiguration {
+        inherit pkgs;
+        modules = [ ./home.nix ];
+        extraSpecialArgs = localAccount;
       };
 
-      formatter = {
-        ${darwinSystem} = nixpkgs.legacyPackages.${darwinSystem}.nixpkgs-fmt;
-        ${linuxSystem} = nixpkgs.legacyPackages.${linuxSystem}.nixpkgs-fmt;
+      darwinConfigurations.macos = nix-darwin.lib.darwinSystem {
+        system = if pkgs.stdenv.isDarwin then system else "aarch64-darwin";
+        specialArgs = localAccount // { inherit inputs; };
+        modules = [ ./darwin/system.nix ];
       };
+
+      formatter.${system} = pkgs.nixpkgs-fmt;
     };
 }

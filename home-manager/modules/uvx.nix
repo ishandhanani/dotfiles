@@ -1,29 +1,17 @@
-{ config, lib, pkgs, ... }:
-
-# Tools that I want to specifically install with uvx
+{ lib, pkgs, ... }:
 
 let
-  # List of uv tools you want installed
-  uvxTools = [ "llm" "y-cli" "ty" "prek" ];
-in
-{
+  tools = [ "llm" "y-cli" "ty" "prek" ];
+in {
   home.activation.installUvTools = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    echo "🔧 Checking uv tools..."
-    mkdir -p "$HOME/.local/bin"
-
-    if [ -f "$HOME/.nix-profile/bin/uv" ]; then
-      for tool in ${builtins.concatStringsSep " " uvxTools}; do
-        # Check if tool is already installed and working
-        if ! "$HOME/.nix-profile/bin/uv" tool list 2>/dev/null | grep -q "^$tool "; then
-          echo "📦 Installing $tool..."
-          "$HOME/.nix-profile/bin/uv" tool install "$tool"
-        else
-          echo "✅ $tool already installed, skipping"
-        fi
-      done
-      echo "✅ uv tools check complete"
-    else
-      echo "❌ uv not found at $HOME/.nix-profile/bin/uv, skipping uv tool installs"
-    fi
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:${pkgs.coreutils}/bin:$PATH"
+    installed_tools="$(${pkgs.uv}/bin/uv tool list)"
+    for tool in ${lib.escapeShellArgs tools}; do
+      if printf '%s\n' "$installed_tools" | ${pkgs.gnugrep}/bin/grep -q "^$tool "; then
+        echo "$tool already installed, skipping"
+      else
+        run ${pkgs.uv}/bin/uv tool install "$tool"
+      fi
+    done
   '';
 }
