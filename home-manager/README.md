@@ -75,6 +75,8 @@ make darwin-status
 
 If the first switch reports that `~/.profile` would be clobbered and it is a symlink from the Nix installer, move that symlink aside before retrying. The `-b backup` behavior moves regular files, but Home Manager intentionally does not auto-backup symlinks.
 
+Some keyboard and pointer defaults, including key repeat and mouse speed, may require a restart after the first nix-darwin switch before `make darwin-status` reflects the applied state.
+
 The nix-darwin targets embed the matching Home Manager target, so `.#work` applies both system preferences and dotfiles. The standalone Home Manager targets remain available as `homeConfigurations.work` and `homeConfigurations.home`.
 
 The macOS system module manages:
