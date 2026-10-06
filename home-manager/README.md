@@ -17,9 +17,9 @@ make apply
 
 `make setup-macos` builds the local nix-darwin configuration as your user, then requests sudo to register and activate that built system. It applies keyboard and pointer settings, Caps Lock to Escape, Dock/Finder/appearance settings, Raycast and Spotlight hotkeys, and Chrome extension policy. It then installs missing GUI apps. Run it on a new Mac or after changing `darwin/system.nix`; it does not run Home Manager.
 
-`make apply` builds and activates standalone Home Manager without sudo. Home Manager owns shell/editor configuration, Nix packages, Cursor settings, Ghostty config, and Rectangle preferences and shortcuts. The existing `rust.nix`, `go.nix`, `uvx.nix`, `agents.nix`, and `clis.nix` modules install missing external tools during user activation. Existing external tools are skipped rather than reinstalled or upgraded. The custom agent CLI release remains Linux x86-64 only.
+`make apply` builds and activates standalone Home Manager without sudo. Home Manager owns shell/editor configuration, Nix packages, Cursor settings, Ghostty config, and Rectangle preferences and shortcuts. Brev is built from the configured branch in `clis.nix`. The `rust.nix`, `go.nix`, `uvx.nix`, and `agents.nix` modules install missing external tools during user activation, skipping existing installations. The custom agent CLI release remains Linux x86-64 only.
 
-Nix supplies installer dependencies, including uv, before activation. Vendor installations happen after Home Manager links the dotfiles; a tool installation failure exits nonzero and can leave an activation partially applied. Rerun `make apply` after resolving the failure. If Brev is missing, a checkout at `$BREV_CLI_SOURCE_DIR` or `~/Desktop/brev-cli` is built when available; otherwise the official installer downloads a release into `~/.local/bin`.
+Nix supplies build and installer dependencies, including Go for Brev and uv for Python tools. Vendor installations happen after Home Manager links the dotfiles; a tool installation failure exits nonzero and can leave an activation partially applied. Rerun `make apply` after resolving the failure.
 
 ## Daily use
 
@@ -35,6 +35,14 @@ Nix supplies installer dependencies, including uv, before activation. Vendor ins
 The `rebuild` shell alias runs `make apply` from the checkout used for your last application. `edit-home` opens that checkout's `home.nix`. If you move the checkout, run `make apply` from its new location to refresh the aliases.
 
 Nix dependencies are pinned by `flake.lock`. Commands use `--impure` only to read the local identity and checkout supplied by the command wrapper; `make apply`, `make check`, and `make setup-macos` do not update the lock file. External vendor installers download their current release only when a tool or app is missing.
+
+## Brev
+
+The `brev-cli` input in `flake.nix` selects `brevdev/brev-cli` branch `idhanani/feat-brev-ssh-config-env-var`; `flake.lock` pins its published commit. `modules/clis.nix` builds that source with Nix's Go compiler and installs it at `~/.local/bin/brev`. No existing Go installation or local Brev checkout is needed, and there is no fallback to the upstream release installer.
+
+On the first apply, Home Manager backs up an existing regular `~/.local/bin/brev` to `brev.backup` and links the configured build. Later applies reuse the Nix build. Unrelated symlinks and existing backup conflicts need the same manual handling described below. Keep development builds at a separate path; `BREV_CLI_SOURCE_DIR` no longer selects the managed CLI.
+
+`make update` advances the locked inputs, including Brev. To update only Brev, run `nix flake update brev-cli` from `home-manager/`, then `make check` and `make apply`. If the branch's Go dependencies changed, update `vendorHash` in `modules/clis.nix` to the actual hash reported by the failed build; review the dependency change before accepting the new hash.
 
 ## GUI apps
 
@@ -63,7 +71,8 @@ Some keyboard and pointer preferences take effect after logout or restart. `make
 - `home.nix`: shared user packages, aliases, and module imports.
 - `modules/`: zsh, Bash, Git, SSH, Neovim, Vim, and Mac app configuration.
 - `darwin/system.nix`: macOS system settings, independent of Home Manager.
-- `modules/{agents,clis,uvx,rust,go}.nix`: install missing external tools during user activation.
+- `modules/clis.nix`: build and install the locked Brev branch; `flake.nix` selects its repository and branch.
+- `modules/{agents,uvx,rust,go}.nix`: install missing external tools during user activation.
 - `scripts/mac-apps.tsv`: GUI app names, cask metadata tokens, bundles, and archive formats.
 - `chrome/extensions.json`: Chrome extension policy.
 - `../rectangle/rectangle.json`: Rectangle preferences and shortcuts; values are converted to individual defaults writes so unrelated preferences survive.

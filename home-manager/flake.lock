@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "brev-cli": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778875883,
+        "narHash": "sha256-UugUS7WA/ARU7GWKzOUQPWZpzxJt7A9g9y7JfDcoTVA=",
+        "owner": "brevdev",
+        "repo": "brev-cli",
+        "rev": "1de32c6606ad7cccb24fcf392394fc8cd3c3a830",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brevdev",
+        "ref": "idhanani/feat-brev-ssh-config-env-var",
+        "repo": "brev-cli",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -59,6 +76,7 @@
     },
     "root": {
       "inputs": {
+        "brev-cli": "brev-cli",
         "home-manager": "home-manager",
         "nix-darwin": "nix-darwin",
         "nixpkgs": "nixpkgs"
