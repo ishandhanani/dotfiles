@@ -1,7 +1,7 @@
 # Home Manager Makefile
 # Commands to manage Nix home-manager configuration
 
-.PHONY: help install install-homebrew work home darwin-work darwin-home darwin-check vm vm-arm clean backup check
+.PHONY: help install install-homebrew work home darwin-work darwin-home darwin-check darwin-status darwin-apps-list darwin-apps-dry-run darwin-apps-install vm vm-arm clean backup check
 
 # Colors
 GREEN := \033[0;32m
@@ -53,6 +53,18 @@ darwin-check: ## Build nix-darwin work configuration without applying
 	@nix build .#darwinConfigurations.work.system --no-link --show-trace
 	@echo "$(GREEN)✓ nix-darwin work configuration builds$(NC)"
 
+darwin-status: ## Read-only check of applied macOS settings and tracked GUI apps
+	@./scripts/check-macos-settings.sh
+
+darwin-apps-list: ## List tracked GUI app install status
+	@./scripts/install-mac-apps.sh --list
+
+darwin-apps-dry-run: ## Show missing GUI app installs without downloading
+	@./scripts/install-mac-apps.sh --dry-run
+
+darwin-apps-install: ## Install missing tracked GUI apps
+	@./scripts/install-mac-apps.sh
+
 backup: ## Backup existing dotfiles
 	@echo "$(BLUE)==> Backing up existing dotfiles...$(NC)"
 	@mkdir -p "$(BACKUP_DIR)"
@@ -80,6 +92,7 @@ darwin-work: darwin-check ## Apply nix-darwin + Home Manager work macOS configur
 	@echo "$(BLUE)==> Applying nix-darwin work configuration...$(NC)"
 	@sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
 	@echo "$(GREEN)✓ nix-darwin work configuration applied successfully!$(NC)"
+	@echo "$(YELLOW)Run 'make darwin-status' to verify applied settings$(NC)"
 
 darwin-home: ## Apply nix-darwin + Home Manager home macOS configuration
 	@echo "$(BLUE)==> Applying nix-darwin home configuration...$(NC)"

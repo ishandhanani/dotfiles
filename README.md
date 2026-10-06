@@ -16,6 +16,7 @@ cd home-manager
 make darwin-check
 sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
 sudo darwin-rebuild switch --flake .#work
+make darwin-status
 ```
 
 Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo. The app bootstrap covers Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, and bb.
@@ -23,8 +24,9 @@ Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo
 ```bash
 cd home-manager
 nix run .#install-homebrew
-scripts/install-mac-apps.sh --list
-scripts/install-mac-apps.sh --dry-run
+make darwin-apps-list
+make darwin-apps-dry-run
+make darwin-apps-install
 ```
 
 ## agents

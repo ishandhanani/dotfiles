@@ -68,6 +68,9 @@ sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
 
 # After the first switch, darwin-rebuild is available from the system profile.
 sudo darwin-rebuild switch --flake .#work
+
+# Read-only status check for the applied settings and tracked GUI apps.
+make darwin-status
 ```
 
 If the first switch reports that `~/.profile` would be clobbered and it is a symlink from the Nix installer, move that symlink aside before retrying. The `-b backup` behavior moves regular files, but Home Manager intentionally does not auto-backup symlinks.
