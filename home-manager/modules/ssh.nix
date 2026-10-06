@@ -1,6 +1,9 @@
 { config, pkgs, lib, ... }:
 
 {
+  # Brev must write to the included local file, not the Nix-managed config.
+  home.sessionVariables.BREV_SSH_CONFIG_FILE = "${config.home.homeDirectory}/.ssh/config.local";
+
   programs.ssh = {
     enable = true;
     enableDefaultConfig = false;

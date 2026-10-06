@@ -40,6 +40,8 @@ Nix dependencies are pinned by `flake.lock`. Commands use `--impure` only to rea
 
 The `brev-cli` input in `flake.nix` selects `brevdev/brev-cli` branch `idhanani/feat-brev-ssh-config-env-var`; `flake.lock` pins its published commit. `modules/clis.nix` builds that source with Nix's Go compiler and installs it at `~/.local/bin/brev`. No existing Go installation or local Brev checkout is needed, and there is no fallback to the upstream release installer.
 
+Home Manager exports `BREV_SSH_CONFIG_FILE=$HOME/.ssh/config.local` for Bash and zsh. Brev can update this writable file while `~/.ssh/config` remains Nix-managed and includes it. Start a new shell after applying to load the variable.
+
 On the first apply, Home Manager backs up an existing regular `~/.local/bin/brev` to `brev.backup` and links the configured build. Later applies reuse the Nix build. Unrelated symlinks and existing backup conflicts need the same manual handling described below. Keep development builds at a separate path; `BREV_CLI_SOURCE_DIR` no longer selects the managed CLI.
 
 `make update` advances the locked inputs, including Brev. To update only Brev, run `nix flake update brev-cli` from `home-manager/`, then `make check` and `make apply`. If the branch's Go dependencies changed, update `vendorHash` in `modules/clis.nix` to the actual hash reported by the failed build; review the dependency change before accepting the new hash.
