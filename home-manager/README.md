@@ -100,6 +100,14 @@ make install-homebrew
 scripts/install-homebrew.sh
 ```
 
+uv is installed by Nix after Home Manager applies. For pre-Nix or repair bootstrap, install it with Astral's standalone installer:
+
+```bash
+make install-uv
+# or
+scripts/install-uv.sh
+```
+
 ## Usage
 
 ### Daily Operations
