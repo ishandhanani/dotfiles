@@ -21,12 +21,11 @@ make darwin-status
 
 Some keyboard and pointer defaults, including key repeat and mouse speed, may require a restart after the first nix-darwin switch before `make darwin-status` reflects the applied state.
 
-Homebrew and GUI app installs are opt-in. Nix does not own Homebrew in this repo. The app bootstrap covers Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password.
+GUI app installs are opt-in. The app bootstrap downloads vendor installers directly for Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password.
 
 ```bash
 cd home-manager
 make install-uv
-make install-homebrew
 make darwin-apps-list
 make darwin-apps-dry-run
 make darwin-apps-install

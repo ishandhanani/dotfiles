@@ -1,7 +1,6 @@
 { config, pkgs, lib, user, homeDirectory, ... }:
 
 let
-  isDarwin = pkgs.stdenv.isDarwin;
   isLinux = pkgs.stdenv.isLinux;
 in
 {
@@ -25,9 +24,6 @@ in
       "$HOME/.local/bin"
       "$HOME/.local/go/bin"
       "$HOME/go/bin"
-    ] ++ lib.optionals isDarwin [
-      "/opt/homebrew/bin"
-      "/opt/homebrew/sbin"
     ];
   };
   

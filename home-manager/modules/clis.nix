@@ -31,15 +31,9 @@
 
       echo "Brev source checkout not found at $source_dir" >&2
       case "$(uname -s)" in
-        Darwin)
-          if ! command -v brew >/dev/null 2>&1; then
-            echo "Skipping Brev install on macOS without Homebrew" >&2
-            return 0
-          fi
-          brew install brevdev/homebrew-brev/brev
-          ;;
-        Linux)
-          curl -fsSL https://raw.githubusercontent.com/brevdev/brev-cli/main/bin/install-latest.sh | ${pkgs.bash}/bin/bash
+        Darwin|Linux)
+          curl -fsSL https://raw.githubusercontent.com/brevdev/brev-cli/main/bin/install-latest.sh \
+            | BREV_INSTALL_DIR="$INSTALL_DIR" ${pkgs.bash}/bin/bash
           ;;
         *)
           echo "Unsupported operating system for Brev: $(uname -s)" >&2

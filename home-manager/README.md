@@ -88,17 +88,9 @@ The macOS system module manages:
 - Chrome extension policy from `chrome/extensions.json`
 - Cursor settings, Ghostty config, and Rectangle defaults from this repository
 
-GUI apps stay outside nix-darwin ownership for now. Install Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads current app installers directly without requiring Homebrew.
+GUI apps stay outside nix-darwin ownership for now. Install Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads current app installers directly.
 
 Chrome extensions are installed through Chrome's `ExtensionSettings` policy with `normal_installed` mode. After switching, open `chrome://policy` and reload policies if Chrome was already running. The policy installs the extensions, but signing into 1Password, Chrome Sync, or work SSO still requires manual authentication.
-
-Homebrew is also outside nix-darwin ownership. To bootstrap it with the official installer:
-
-```bash
-make install-homebrew
-# or
-scripts/install-homebrew.sh
-```
 
 uv is installed by Nix after Home Manager applies. For pre-Nix or repair bootstrap, install it with Astral's standalone installer:
 
