@@ -6,7 +6,9 @@
 
 {
   home.activation.installRust = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    if [ -f "$HOME/.cargo/bin/rustup" ]; then
+    if [[ -n "''${DRY_RUN:-}" ]]; then
+      echo "Would install Rust if missing"
+    elif [ -f "$HOME/.cargo/bin/rustup" ]; then
       echo "rustup already installed, skipping"
     else
       echo "Installing Rust via rustup..."

@@ -24,7 +24,7 @@ read_default() {
 
 number_equal() {
   /usr/bin/awk -v actual="$1" -v expected="$2" 'BEGIN {
-    if (actual == "<unset>") exit 1
+    if (actual !~ /^-?[0-9]+([.][0-9]+)?$/) exit 1
     exit ((actual + 0) == (expected + 0) ? 0 : 1)
   }'
 }
@@ -50,17 +50,6 @@ check_string() {
     ok "${label}: ${actual}"
   else
     bad "${label}: expected ${expected}, got ${actual}"
-  fi
-}
-
-check_file() {
-  local label="$1"
-  local path="$2"
-
-  if [[ -e "$path" ]]; then
-    ok "${label}: ${path}"
-  else
-    bad "${label}: missing ${path}"
   fi
 }
 
@@ -106,27 +95,20 @@ check_caps_lock_escape() {
 
 check_spotlight_hotkey_disabled() {
   local hotkey_id="$1"
-  local block
-
-  block="$(/usr/bin/defaults read com.apple.symbolichotkeys AppleSymbolicHotKeys 2>/dev/null \
-    | /usr/bin/awk -v id="$hotkey_id" '
-      $1 == id { capture = 1 }
-      capture { print }
-      capture && /^[[:space:]]*};/ { exit }
-    ')"
-
-  if printf '%s\n' "$block" | /usr/bin/grep -q 'enabled = 0'; then
-    ok "Spotlight hotkey ${hotkey_id} disabled"
-  else
-    bad "Spotlight hotkey ${hotkey_id}: expected disabled"
-  fi
+  local enabled
+  enabled="$(/usr/bin/defaults export com.apple.symbolichotkeys - 2>/dev/null \
+    | /usr/bin/plutil -extract "AppleSymbolicHotKeys.${hotkey_id}.enabled" raw -o - -- - 2>/dev/null || printf '<unset>')"
+  case "$enabled" in
+    0|false) ok "Spotlight hotkey ${hotkey_id} disabled" ;;
+    *) bad "Spotlight hotkey ${hotkey_id}: expected disabled, got ${enabled}" ;;
+  esac
 }
 
 check_chrome_extension_policy() {
-  local extensions_file policy i id name
+  local extensions_file policy i id name mode
 
   extensions_file="$(cd "$(dirname "$0")/.." && pwd)/chrome/extensions.json"
-  if ! policy="$(/usr/bin/defaults read /Library/Preferences/com.google.Chrome ExtensionSettings 2>/dev/null)"; then
+  if ! policy="$(/usr/bin/defaults export /Library/Preferences/com.google.Chrome - 2>/dev/null)"; then
     bad "Chrome extension policy: expected ExtensionSettings in /Library/Preferences/com.google.Chrome"
     return
   fi
@@ -134,18 +116,25 @@ check_chrome_extension_policy() {
   i=0
   while id="$(/usr/bin/plutil -extract "${i}.id" raw -o - "$extensions_file" 2>/dev/null)"; do
     name="$(/usr/bin/plutil -extract "${i}.name" raw -o - "$extensions_file" 2>/dev/null || printf '%s' "$id")"
-    if printf '%s\n' "$policy" | /usr/bin/grep -q "$id"; then
-      ok "Chrome extension policy includes ${name}"
-    else
-      bad "Chrome extension policy missing ${name} (${id})"
-    fi
+    mode="$(printf '%s\n' "$policy" | /usr/bin/plutil -extract "ExtensionSettings.${id}.installation_mode" raw -o - -- - 2>/dev/null || printf '<unset>')"
+    check_string "Chrome extension ${name}" "$mode" normal_installed
     i=$((i + 1))
   done
+  if [[ "$i" == 0 ]]; then bad "Chrome extension manifest is empty or invalid"; fi
 }
 
 check_rectangle_defaults() {
   check_number "Rectangle launch on login" "$(read_default com.knollsoft.Rectangle launchOnLogin)" "1"
   check_number "Rectangle alternate shortcuts" "$(read_default com.knollsoft.Rectangle alternateDefaultShortcuts)" "1"
+  local shortcuts key actual
+  shortcuts="$(/usr/bin/defaults export com.knollsoft.Rectangle - 2>/dev/null || true)"
+  for key in keyCode modifierFlags; do
+    actual="$(printf '%s\n' "$shortcuts" | /usr/bin/plutil -extract "leftHalf.$key" raw -o - -- - 2>/dev/null || printf '<unset>')"
+    case "$key" in
+      keyCode) check_number "Rectangle left-half key" "$actual" 123 ;;
+      modifierFlags) check_number "Rectangle left-half modifiers" "$actual" 786432 ;;
+    esac
+  done
 }
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -183,12 +172,14 @@ check_file_contains "Ghostty dark foreground" "${HOME}/.config/ghostty/config" "
 check_rectangle_defaults
 
 info "Tracked GUI apps"
-"$(dirname "$0")/install-mac-apps.sh" --list
+if ! "$(dirname "$0")/install-mac-apps.sh" --check; then
+  bad "Tracked GUI apps are missing"
+fi
 
 if [[ "$failures" -eq 0 ]]; then
-  ok "macOS settings match this repo"
+  ok "macOS settings, app configs, and GUI apps match this repo"
 else
-  printf '\n%s setting check(s) failed. If you just switched, log out/in once and rerun this target.\n' "$failures" >&2
+  printf '\n%s check(s) failed. Run make setup-macos for system settings/apps and make apply for app configs. Keyboard/pointer changes may need a restart.\n' "$failures" >&2
 fi
 
 exit "$failures"

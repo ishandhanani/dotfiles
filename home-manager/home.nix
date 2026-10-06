@@ -1,4 +1,4 @@
-{ config, pkgs, lib, user, homeDirectory, ... }:
+{ pkgs, lib, user, homeDirectory, sourceDirectory, ... }:
 
 let
   isLinux = pkgs.stdenv.isLinux;
@@ -14,8 +14,8 @@ in
     # Global shell aliases available to all shells
     shellAliases = {
       # Quick edits
-      edit-home = "$EDITOR ~/.config/home-manager/home.nix";
-      rebuild = "home-manager switch";
+      edit-home = "$EDITOR ${lib.escapeShellArg "${sourceDirectory}/home-manager/home.nix"}";
+      rebuild = "make -C ${lib.escapeShellArg sourceDirectory} apply";
       v = "nvim";
     };
     

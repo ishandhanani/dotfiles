@@ -1,504 +1,171 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-NAMES=("Google Chrome" "iTerm2" "Raycast" "Rectangle" "Cursor" "Tailscale" "Ghostty" "bb" "1Password")
-CASKS=("google-chrome" "iterm2" "raycast" "rectangle" "cursor" "tailscale-app" "ghostty" "bb" "1password")
-BUNDLES=("Google Chrome.app" "iTerm.app" "Raycast.app" "Rectangle.app" "Cursor.app" "Tailscale.app" "Ghostty.app" "bb.app" "1Password.app")
-KINDS=("dmg" "zip" "dmg" "dmg" "zip" "pkg" "dmg" "dmg" "zip")
-
-APP_DIR="/Applications"
-DOWNLOAD_DIR="${HOME}/Downloads/mac-apps"
-DRY_RUN=0
-LIST=0
-DOWNLOAD_ONLY=0
-KEEP_DOWNLOADS=0
-CLEANUP_DIRS=()
-CLEANUP_FILES=()
-MOUNT_DIRS=()
-DOWNLOADED_ARCHIVE=""
-FETCHED_METADATA_FILE=""
-SELECTED_URL=""
-SELECTED_SHA=""
-
-info() { printf '\033[1;34m=> %s\033[0m\n' "$*" >&2; }
-ok() { printf '\033[1;32m   %s\033[0m\n' "$*" >&2; }
-warn() { printf '\033[1;33m!! %s\033[0m\n' "$*" >&2; }
-error() { printf '\033[0;31m!! %s\033[0m\n' "$*" >&2; }
-
-cleanup_all() {
-  local mount dir file
-
-  set +u
-
-  for mount in "${MOUNT_DIRS[@]}"; do
-    hdiutil detach "$mount" >/dev/null 2>&1 || true
-    rmdir "$mount" >/dev/null 2>&1 || true
-  done
-
-  for dir in "${CLEANUP_DIRS[@]}"; do
-    rm -rf "$dir"
-  done
-
-  for file in "${CLEANUP_FILES[@]}"; do
-    rm -f "$file"
-  done
-}
-
-trap cleanup_all EXIT
-
-usage() {
-  cat <<'EOF'
-Usage: ./install-mac-apps.sh [options]
-
-Options:
-  -h, --help              Show this help and exit
-  -n, --dry-run           Print what would be done without downloading or installing
-  -l, --list              List tracked apps and their install status
-      --download-only     Download missing app archives without installing them
-      --download-dir DIR  Directory for downloaded archives (default: ~/Downloads/mac-apps)
-      --app-dir DIR       Install destination (default: /Applications)
-      --user-app-dir      Install to ~/Applications
-      --keep-downloads    Keep downloaded archives after installing
-EOF
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    -n|--dry-run)
-      DRY_RUN=1
-      shift
-      ;;
-    -l|--list)
-      LIST=1
-      shift
-      ;;
-    --download-only)
-      DOWNLOAD_ONLY=1
-      KEEP_DOWNLOADS=1
-      shift
-      ;;
-    --download-dir)
-      DOWNLOAD_DIR="${2:?missing directory after --download-dir}"
-      shift 2
-      ;;
-    --app-dir)
-      APP_DIR="${2:?missing directory after --app-dir}"
-      shift 2
-      ;;
-    --user-app-dir)
-      APP_DIR="${HOME}/Applications"
-      shift
-      ;;
-    --keep-downloads)
-      KEEP_DOWNLOADS=1
-      shift
-      ;;
-    *)
-      error "Unknown option: $1"
-      usage
-      exit 1
-      ;;
-  esac
-done
-
-if [[ "${OSTYPE}" != darwin* ]]; then
-  error "This script is intended for macOS only (found OSTYPE=${OSTYPE})"
+manifest="$(dirname "${BASH_SOURCE[0]}")/mac-apps.tsv"
+mode="${1:-install}"
+if [[ $# -gt 1 ]]; then
+  printf 'Expected at most one option\n' >&2
+  exit 1
+fi
+case "$mode" in
+  --help|-h)
+    printf 'Usage: %s [--list|--check|--dry-run]\n' "$0"
+    printf 'Install missing GUI apps into /Applications. --check fails if apps are missing.\n'
+    exit 0 ;;
+  install|--list|--check|--dry-run) ;;
+  *) printf 'Unknown option: %s\n' "$mode" >&2; exit 1 ;;
+esac
+if [[ "$(uname -s)" != Darwin ]]; then
+  printf 'This installer is only available on macOS\n' >&2
   exit 1
 fi
 
-require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    error "Missing required command: $1"
-    exit 1
-  fi
-}
-
 app_location() {
-  local bundle="$1"
   local dir
-
-  for dir in "$APP_DIR" /Applications "$HOME/Applications"; do
-    if [[ -d "${dir}/${bundle}" ]]; then
-      printf '%s\n' "${dir}/${bundle}"
+  for dir in /Applications "$HOME/Applications"; do
+    if [[ -d "$dir/$1" ]]; then
+      printf '%s\n' "$dir/$1"
       return 0
     fi
   done
-
   return 1
 }
 
-list_apps() {
-  local i name cask bundle status
-
-  printf '%-12s %-28s %s\n' "Name" "Metadata" "Status"
-  for i in "${!NAMES[@]}"; do
-    name="${NAMES[$i]}"
-    cask="${CASKS[$i]}"
-    bundle="${BUNDLES[$i]}"
-    if status="$(app_location "$bundle")"; then
-      printf '%-12s %-28s %s\n' "$name" "$cask" "$status"
-    else
-      printf '%-12s %-28s %s\n' "$name" "$cask" "missing"
-    fi
-  done
-}
-
-metadata_url() {
-  printf 'https://formulae.brew.sh/api/cask/%s.json\n' "$1"
-}
-
 macos_codename() {
-  local version major minor
-
+  local version
   version="$(sw_vers -productVersion)"
-  major="${version%%.*}"
-
-  case "$major" in
-    27)
-      printf 'golden_gate\n'
-      ;;
-    26)
-      printf 'tahoe\n'
-      ;;
-    15)
-      printf 'sequoia\n'
-      ;;
-    14)
-      printf 'sonoma\n'
-      ;;
-    13)
-      printf 'ventura\n'
-      ;;
-    12)
-      printf 'monterey\n'
-      ;;
-    11)
-      printf 'big_sur\n'
-      ;;
-    10)
-      minor="${version#10.}"
-      minor="${minor%%.*}"
-      case "$minor" in
-        15)
-          printf 'catalina\n'
-          ;;
-        14)
-          printf 'mojave\n'
-          ;;
-        13)
-          printf 'high_sierra\n'
-          ;;
-        12)
-          printf 'sierra\n'
-          ;;
-        *)
-          return 1
-          ;;
-      esac
-      ;;
-    *)
-      return 1
-      ;;
+  case "$version" in
+    27.*) printf 'golden_gate\n' ;;
+    26.*) printf 'tahoe\n' ;;
+    15.*) printf 'sequoia\n' ;;
+    14.*) printf 'sonoma\n' ;;
+    13.*) printf 'ventura\n' ;;
+    12.*) printf 'monterey\n' ;;
+    11.*) printf 'big_sur\n' ;;
+    10.15.*) printf 'catalina\n' ;;
+    10.14.*) printf 'mojave\n' ;;
+    *) return 1 ;;
   esac
 }
 
 variation_candidates() {
-  local arch codename
-
-  arch="$(uname -m)"
+  local codename
   codename="$(macos_codename || true)"
-
-  case "$arch" in
+  case "$(uname -m)" in
     arm64)
-      if [[ -n "$codename" ]]; then
-        printf 'arm64_%s\n' "$codename"
-      fi
-      printf 'arm64\n'
-      ;;
+      [[ -z "$codename" ]] || printf 'arm64_%s\n' "$codename"
+      printf 'arm64\n' ;;
     x86_64)
-      if [[ -n "$codename" ]]; then
-        printf '%s\n' "$codename"
-        printf 'x86_64_%s\n' "$codename"
-        printf 'intel_%s\n' "$codename"
-      fi
-      printf 'x86_64\n'
-      printf 'intel\n'
-      ;;
-    *)
-      if [[ -n "$codename" ]]; then
-        printf '%s_%s\n' "$arch" "$codename"
-      fi
-      printf '%s\n' "$arch"
-      ;;
+      [[ -z "$codename" ]] || printf '%s\nx86_64_%s\nintel_%s\n' "$codename" "$codename" "$codename"
+      printf 'x86_64\nintel\n' ;;
+    *) printf 'Unsupported Mac architecture\n' >&2; return 1 ;;
   esac
 }
 
-extract_metadata_value() {
-  local metadata_file="$1"
-  local path="$2"
+metadata_value() {
   local value
-
-  if ! value="$(/usr/bin/plutil -extract "$path" raw -o - "$metadata_file" 2>/dev/null)"; then
-    return 1
-  fi
-
-  if [[ -z "$value" || "$value" == "null" ]]; then
-    return 1
-  fi
-
+  value="$(/usr/bin/plutil -extract "$2" raw -o - "$1" 2>/dev/null)" || return 1
+  [[ -n "$value" && "$value" != null ]] || return 1
   printf '%s\n' "$value"
 }
 
-fetch_cask_metadata() {
-  local cask="$1"
-  local metadata_file
-
-  metadata_file="$(mktemp "${TMPDIR:-/tmp}/mac-app-cask.XXXXXX")"
-  CLEANUP_FILES+=("$metadata_file")
-  curl -fsSL "$(metadata_url "$cask")" -o "$metadata_file"
-  FETCHED_METADATA_FILE="$metadata_file"
-}
-
-select_cask_metadata() {
-  local metadata_file="$1"
-  local key url sha
-
-  SELECTED_URL=""
-  SELECTED_SHA=""
-
+select_metadata() {
+  local key
   while IFS= read -r key; do
-    if url="$(extract_metadata_value "$metadata_file" "variations.${key}.url")"; then
-      sha="$(extract_metadata_value "$metadata_file" "variations.${key}.sha256" || printf 'no_check')"
-      SELECTED_URL="$url"
-      SELECTED_SHA="$sha"
-      return 0
+    if download_url="$(metadata_value "$1" "variations.$key.url")"; then
+      expected_sha="$(metadata_value "$1" "variations.$key.sha256" || printf no_check)"
+      return
     fi
   done < <(variation_candidates)
-
-  if url="$(extract_metadata_value "$metadata_file" url)"; then
-    sha="$(extract_metadata_value "$metadata_file" sha256 || printf 'no_check')"
-    SELECTED_URL="$url"
-    SELECTED_SHA="$sha"
-    return 0
-  fi
-
-  error "Could not resolve a download URL from cask metadata"
-  return 1
+  download_url="$(metadata_value "$1" url)"
+  expected_sha="$(metadata_value "$1" sha256 || printf no_check)"
 }
 
-verify_archive() {
-  local name="$1"
-  local archive="$2"
-  local expected="$3"
-  local actual
-
-  if [[ "$expected" == "no_check" ]]; then
-    warn "No SHA-256 published for ${name}; skipping verification"
-    return 0
+work_dir=""
+mount_dir=""
+cleanup() {
+  if [[ -n "$mount_dir" ]]; then
+    if ! hdiutil detach "$mount_dir" >/dev/null 2>&1; then
+      printf 'Could not unmount %s; leaving temporary files in place\n' "$mount_dir" >&2
+      return
+    fi
   fi
+  if [[ -n "$work_dir" ]]; then rm -rf "$work_dir"; fi
+}
+trap cleanup EXIT
 
-  require_command shasum
-  actual="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
-  if [[ "$actual" != "$expected" ]]; then
-    error "SHA-256 mismatch for ${name}"
-    error "Expected: ${expected}"
-    error "Actual:   ${actual}"
+copy_bundle() {
+  local source
+  source="$(find "$1" -maxdepth 4 -type d -name "$2" -print -quit)"
+  if [[ -z "$source" ]]; then
+    printf 'Could not find %s in the downloaded archive\n' "$2" >&2
     return 1
   fi
-
-  ok "Verified ${name} SHA-256"
-}
-
-find_app_bundle() {
-  local root="$1"
-  local bundle="$2"
-  local found
-
-  found="$(find "$root" -maxdepth 4 -name "$bundle" -type d -print -quit)"
-  if [[ -z "$found" ]]; then
-    error "Could not find ${bundle} under ${root}"
-    return 1
-  fi
-
-  printf '%s\n' "$found"
-}
-
-ensure_app_dir() {
-  if [[ -d "$APP_DIR" ]]; then
-    return 0
-  fi
-
-  mkdir -p "$APP_DIR" 2>/dev/null || sudo mkdir -p "$APP_DIR"
-}
-
-copy_app() {
-  local source="$1"
-  local bundle="$2"
-  local dest="${APP_DIR%/}/${bundle}"
-
-  if [[ -e "$dest" ]]; then
-    warn "${bundle} appeared during install; leaving it untouched"
-    return 0
-  fi
-
-  ensure_app_dir
-  if [[ -w "$APP_DIR" ]]; then
-    ditto "$source" "$dest"
+  if [[ -e "/Applications/$2" ]]; then
+    printf '%s appeared during installation, skipping\n' "$2"
+  elif [[ -w /Applications ]]; then
+    ditto "$source" "/Applications/$2"
   else
-    info "Copying ${bundle} with sudo into ${APP_DIR}"
-    sudo ditto "$source" "$dest"
+    sudo ditto "$source" "/Applications/$2"
   fi
 }
 
-download_archive() {
-  local name="$1"
-  local cask="$2"
-  local kind="$3"
-  local metadata_file url sha archive
-
-  fetch_cask_metadata "$cask"
-  metadata_file="$FETCHED_METADATA_FILE"
-  select_cask_metadata "$metadata_file"
-  url="$SELECTED_URL"
-  sha="$SELECTED_SHA"
-  archive="${DOWNLOAD_DIR%/}/${cask}.${kind}"
-
-  info "Downloading ${name}"
-  mkdir -p "$DOWNLOAD_DIR"
-  curl -fL --progress-bar -o "$archive" "$url"
-  verify_archive "$name" "$archive" "$sha"
-  DOWNLOADED_ARCHIVE="$archive"
-}
-
-install_zip() {
-  local archive="$1"
-  local bundle="$2"
-  local extract_dir source
-
-  extract_dir="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-zip.XXXXXX")"
-  CLEANUP_DIRS+=("$extract_dir")
-
-  ditto -x -k "$archive" "$extract_dir"
-  source="$(find_app_bundle "$extract_dir" "$bundle")"
-  copy_app "$source" "$bundle"
-
-  rm -rf "$extract_dir"
-}
-
-install_dmg() {
-  local archive="$1"
-  local bundle="$2"
-  local mount_dir source
-
-  mount_dir="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-dmg.XXXXXX")"
-  MOUNT_DIRS+=("$mount_dir")
-
-  hdiutil attach "$archive" -nobrowse -readonly -mountpoint "$mount_dir" >/dev/null
-  source="$(find_app_bundle "$mount_dir" "$bundle")"
-  copy_app "$source" "$bundle"
-
-  hdiutil detach "$mount_dir" >/dev/null
-  rmdir "$mount_dir"
-}
-
-install_pkg() {
-  local archive="$1"
-  local bundle="$2"
-
-  info "Installing ${bundle} with macOS installer"
-  sudo /usr/sbin/installer -pkg "$archive" -target /
-  if ! app_location "$bundle" >/dev/null; then
-    error "Installer completed, but ${bundle} was not found"
-    return 1
+missing=0
+while IFS=$'\t' read -r name cask bundle kind; do
+  if location="$(app_location "$bundle")"; then
+    printf '%-14s %s\n' "$name" "$location"
+    continue
   fi
-}
+  missing=$((missing + 1))
+  case "$mode" in
+    --list|--check) printf '%-14s missing\n' "$name"; continue ;;
+    --dry-run) printf 'Would download and install %s into /Applications\n' "$name"; continue ;;
+  esac
 
-install_archive() {
-  local archive="$1"
-  local kind="$2"
-  local bundle="$3"
+  if [[ -z "$work_dir" ]]; then work_dir="$(mktemp -d)"; fi
+  curl -fsSL "https://formulae.brew.sh/api/cask/$cask.json" -o "$work_dir/metadata.json"
+  select_metadata "$work_dir/metadata.json"
+  archive="$work_dir/$cask.$kind"
+  printf 'Downloading %s\n' "$name"
+  curl -fL --progress-bar "$download_url" -o "$archive"
+  if [[ "$expected_sha" == no_check ]]; then
+    printf 'No SHA-256 published for %s; skipping verification\n' "$name" >&2
+  else
+    actual_sha="$(shasum -a 256 "$archive" | cut -d ' ' -f 1)"
+    if [[ "$actual_sha" != "$expected_sha" ]]; then
+      printf 'SHA-256 mismatch for %s\n' "$name" >&2
+      exit 1
+    fi
+    printf 'Verified %s SHA-256\n' "$name"
+  fi
 
   case "$kind" in
     zip)
-      install_zip "$archive" "$bundle"
-      ;;
+      mkdir "$work_dir/extracted"
+      ditto -x -k "$archive" "$work_dir/extracted"
+      copy_bundle "$work_dir/extracted" "$bundle"
+      rm -rf "$work_dir/extracted" ;;
     dmg)
-      install_dmg "$archive" "$bundle"
-      ;;
+      mkdir "$work_dir/mount"
+      hdiutil attach "$archive" -nobrowse -readonly -mountpoint "$work_dir/mount" >/dev/null
+      mount_dir="$work_dir/mount"
+      copy_bundle "$mount_dir" "$bundle"
+      hdiutil detach "$mount_dir" >/dev/null
+      rmdir "$mount_dir"
+      mount_dir="" ;;
     pkg)
-      install_pkg "$archive" "$bundle"
-      ;;
-    *)
-      error "Unsupported archive kind: $kind"
-      exit 1
-      ;;
+      sudo /usr/sbin/installer -pkg "$archive" -target / ;;
+    *) printf 'Unsupported archive format: %s\n' "$kind" >&2; exit 1 ;;
   esac
-}
-
-if [[ "$LIST" == 1 ]]; then
-  list_apps
-  exit 0
-fi
-
-MISSING_INDEXES=()
-for i in "${!NAMES[@]}"; do
-  if app_location "${BUNDLES[$i]}" >/dev/null; then
-    ok "${NAMES[$i]} already present (${BUNDLES[$i]})"
-  else
-    MISSING_INDEXES+=("$i")
+  if ! app_location "$bundle" >/dev/null; then
+    printf 'Installer completed but %s is missing\n' "$bundle" >&2
+    exit 1
   fi
-done
+  rm -f "$archive"
+  printf 'Installed %s\n' "$name"
+done < "$manifest"
 
-if [[ "${#MISSING_INDEXES[@]}" -eq 0 ]]; then
-  ok "All tracked apps are present"
-  exit 0
-fi
-
-if [[ "$DRY_RUN" == 1 ]]; then
-  for i in "${MISSING_INDEXES[@]}"; do
-    info "Would resolve ${NAMES[$i]} from $(metadata_url "${CASKS[$i]}")"
-    if [[ "$DOWNLOAD_ONLY" == 1 ]]; then
-      info "Would download ${NAMES[$i]} to ${DOWNLOAD_DIR}"
-    else
-      info "Would download and install ${NAMES[$i]} into ${APP_DIR}"
-    fi
-  done
-  exit 0
-fi
-
-require_command curl
-
-if [[ "$DOWNLOAD_ONLY" != 1 ]]; then
-  require_command ditto
-  require_command hdiutil
-  require_command /usr/sbin/installer
-fi
-
-if [[ ! -x /usr/bin/plutil ]]; then
-  error "Missing required command: /usr/bin/plutil"
+if [[ "$mode" == --check && "$missing" -gt 0 ]]; then
+  printf '%s GUI app(s) missing\n' "$missing" >&2
   exit 1
 fi
-
-if [[ "$KEEP_DOWNLOADS" != 1 ]]; then
-  DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mac-app-downloads.XXXXXX")"
-  CLEANUP_DIRS+=("$DOWNLOAD_DIR")
-fi
-
-for i in "${MISSING_INDEXES[@]}"; do
-  name="${NAMES[$i]}"
-  download_archive "$name" "${CASKS[$i]}" "${KINDS[$i]}"
-  archive="$DOWNLOADED_ARCHIVE"
-
-  if [[ "$DOWNLOAD_ONLY" == 1 ]]; then
-    ok "Downloaded ${name}: ${archive}"
-    continue
-  fi
-
-  install_archive "$archive" "${KINDS[$i]}" "${BUNDLES[$i]}"
-  ok "Installed ${name}"
-done

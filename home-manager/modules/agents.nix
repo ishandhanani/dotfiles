@@ -12,7 +12,7 @@ in
     set -eo pipefail
 
     INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
+    run mkdir -p "$INSTALL_DIR"
 
     install_claude() {
       if command -v claude >/dev/null 2>&1; then
@@ -45,7 +45,7 @@ in
     }
 
     install_cursor() {
-      if command -v cursor >/dev/null 2>&1; then
+      if command -v cursor-agent >/dev/null 2>&1; then
         echo "✅ Cursor already installed, skipping"
         return 0
       fi
@@ -124,10 +124,14 @@ in
       echo "✅ Codex $version installed"
     }
 
-    install_claude
-    install_devin
-    install_cursor
-    install_codex
+    if [[ -n "''${DRY_RUN:-}" ]]; then
+      echo "Would install missing agent CLIs"
+    else
+      install_claude
+      install_devin
+      install_cursor
+      install_codex
+    fi
 
     echo "✅ Agent CLIs check complete"
   '';

@@ -9,23 +9,23 @@
     set -eo pipefail
 
     INSTALL_DIR="$HOME/.local/bin"
-    mkdir -p "$INSTALL_DIR"
+    run mkdir -p "$INSTALL_DIR"
 
     install_brev() {
+      if command -v brev >/dev/null 2>&1; then
+        echo "Brev already installed, skipping"
+        return 0
+      fi
+
       source_dir="''${BREV_CLI_SOURCE_DIR:-$HOME/Desktop/brev-cli}"
       if [ -d "$source_dir" ] && [ -f "$source_dir/go.mod" ]; then
         echo "Building Brev from $source_dir..."
         version="dev-$(git -C "$source_dir" rev-parse --short HEAD)"
-        ${pkgs.go}/bin/go build -o "$INSTALL_DIR/brev" \
+        (cd "$source_dir" && ${pkgs.go}/bin/go build -o "$INSTALL_DIR/brev" \
           -ldflags "-X github.com/brevdev/brev-cli/pkg/cmd/version.Version=$version" \
-          "$source_dir"
+          .)
         chmod 0755 "$INSTALL_DIR/brev"
         echo "Brev built from source"
-        return 0
-      fi
-
-      if command -v brev >/dev/null 2>&1; then
-        echo "Brev already installed, skipping"
         return 0
       fi
 
@@ -42,7 +42,11 @@
       esac
     }
 
-    install_brev
+    if [[ -n "''${DRY_RUN:-}" ]]; then
+      echo "Would install Brev if missing"
+    else
+      install_brev
+    fi
     echo "CLI check complete"
   '';
 }

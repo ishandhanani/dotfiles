@@ -2,36 +2,20 @@
 
 Personal dotfiles managed with Home Manager and Nix.
 
-## macOS
-
-The macOS setup lives under `home-manager/` and has two layers:
-
-- Home Manager manages the user shell, CLI packages, git/vim/zsh config, Cursor settings, Ghostty config, and Rectangle defaults.
-- nix-darwin manages system preferences like keyboard repeat, Caps Lock as Escape, dark mode, Dock/Finder settings, trackpad settings, Raycast on Cmd-Space, disabled Spotlight hotkeys, and Chrome extension policy.
-
-Useful commands:
-
 ```bash
-cd home-manager
-make darwin-check
-sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
-sudo darwin-rebuild switch --flake .#work
-make darwin-status
+make install        # Install Nix if missing, then restart your terminal
+make setup-macos    # macOS settings and missing GUI apps (Mac only)
+make apply          # Shell/editor configuration and missing CLI tools
 ```
 
-Some keyboard and pointer defaults, including key repeat and mouse speed, may require a restart after the first nix-darwin switch before `make darwin-status` reflects the applied state.
+Run these commands from the repository root or `home-manager/`. They detect your account and architecture; there is no work/home profile to select.
 
-GUI app installs are opt-in. The app bootstrap downloads vendor installers directly for Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password.
+- `make setup-macos` uses nix-darwin for system settings and a direct-download installer for GUI apps. Run it on a new Mac or when changing system preferences.
+- `make apply` uses standalone Home Manager for zsh, Neovim, Git, SSH, Cursor, Ghostty, Rectangle, and CLI tools. The existing Nix modules install missing external tools during activation. This is the normal command after editing dotfiles.
+- `make check` builds the configurations without applying them. `make status` checks the live Mac setup. `make update` updates locked Nix dependencies.
 
-```bash
-cd home-manager
-make install-uv
-make darwin-apps-list
-make darwin-apps-dry-run
-make darwin-apps-install
-```
+See [setup and maintenance](home-manager/README.md) for ownership, first-run conflicts, and verification.
 
-## agents
+## Agents
 
-- shared source: `agents/`
-- install both Claude + Codex: `./setup.sh`
+Shared agent instructions and skills live in `agents/`. Link them with `./agents/setup.sh`.

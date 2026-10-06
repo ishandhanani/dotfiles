@@ -1,143 +1,24 @@
-# Home Manager Makefile
-# Commands to manage Nix home-manager configuration
+.DEFAULT_GOAL := help
+CONFIG_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+.PHONY: help install setup-macos apply check status update
 
-.PHONY: help install install-uv work home darwin-work darwin-home darwin-check darwin-status darwin-apps-list darwin-apps-dry-run darwin-apps-install vm vm-arm clean backup check
+help: ## Show available commands
+	@awk 'BEGIN { FS = ":.*## " } /^[a-z-]+:.*## / { printf "  %-14s %s\n", $$1, $$2 }' "$(CONFIG_DIR)Makefile"
 
-# Colors
-GREEN := \033[0;32m
-BLUE := \033[0;34m
-YELLOW := \033[1;33m
-RED := \033[0;31m
-NC := \033[0m
+install: ## Install Nix if missing
+	@"$(CONFIG_DIR)install.sh"
 
-# Variables
-OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
-ARCH := $(shell uname -m)
-USERNAME := $(shell whoami)
-BACKUP_DIR := $(HOME)/.dotfiles-backup-$(shell date +%Y%m%d-%H%M%S)
+setup-macos: ## Apply macOS settings and install missing GUI apps
+	@"$(CONFIG_DIR)scripts/manage.sh" setup-macos
 
-help: ## Show this help message
-	@echo "$(BLUE)Dotfiles Makefile$(NC)"
-	@echo "=================="
-	@echo ""
-	@echo "Available targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-12s$(NC) %s\n", $$1, $$2}'
-	@echo ""
-	@echo "$(YELLOW)First time setup:$(NC)"
-	@echo "  1. Run 'make install' to install Nix"
-	@echo "  2. Restart your terminal"
-	@echo "  3. Run 'make work', 'make home', or 'make vm'"
+apply: ## Apply dotfiles and install missing CLI tools
+	@"$(CONFIG_DIR)scripts/manage.sh" apply
 
-install: ## Install Nix using the Determinate installer (flakes on by default)
-	@echo "$(BLUE)==> Installing Nix with Determinate installer...$(NC)"
-	@if ! command -v nix &> /dev/null; then \
-		echo "$(YELLOW)Installing Nix for $(OS) ($(ARCH))...$(NC)"; \
-		curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm; \
-		echo "$(GREEN)✓ Nix installed successfully$(NC)"; \
-		echo "$(YELLOW)! Restart your terminal (or 'source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'), then run 'make work/home/vm'$(NC)"; \
-	else \
-		echo "$(GREEN)✓ Nix is already installed (Determinate enables flakes by default)$(NC)"; \
-	fi
+check: ## Build the local configurations without applying
+	@"$(CONFIG_DIR)scripts/manage.sh" check
 
-install-uv: ## Install uv with Astral's official installer
-	@echo "$(BLUE)==> Installing uv with Astral's official installer...$(NC)"
-	@./scripts/install-uv.sh
+status: ## Check macOS settings, app configs, and installed GUI apps
+	@"$(CONFIG_DIR)scripts/check-macos-settings.sh"
 
-check: ## Check if configuration builds without applying
-	@echo "$(BLUE)==> Checking configuration...$(NC)"
-	@nix flake check --show-trace
-	@echo "$(GREEN)✓ Configuration check passed$(NC)"
-
-darwin-check: ## Build nix-darwin work configuration without applying
-	@echo "$(BLUE)==> Checking nix-darwin work configuration...$(NC)"
-	@nix build .#darwinConfigurations.work.system --no-link --show-trace
-	@echo "$(GREEN)✓ nix-darwin work configuration builds$(NC)"
-
-darwin-status: ## Read-only check of applied macOS settings and tracked GUI apps
-	@./scripts/check-macos-settings.sh
-
-darwin-apps-list: ## List tracked GUI app install status
-	@./scripts/install-mac-apps.sh --list
-
-darwin-apps-dry-run: ## Show missing GUI app installs without downloading
-	@./scripts/install-mac-apps.sh --dry-run
-
-darwin-apps-install: ## Install missing tracked GUI apps
-	@./scripts/install-mac-apps.sh
-
-backup: ## Backup existing dotfiles
-	@echo "$(BLUE)==> Backing up existing dotfiles...$(NC)"
-	@mkdir -p "$(BACKUP_DIR)"
-	@for file in .zshrc .bashrc .vimrc .gitconfig .tmux.conf; do \
-		if [ -f "$(HOME)/$$file" ]; then \
-			cp "$(HOME)/$$file" "$(BACKUP_DIR)/"; \
-			echo "$(GREEN)✓ Backed up $$file$(NC)"; \
-		fi; \
-	done
-	@echo "$(YELLOW)Backup location: $(BACKUP_DIR)$(NC)"
-
-work: backup check ## Apply work configuration (idhanani@macbook)
-	@echo "$(BLUE)==> Applying work configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#work -b backup
-	@echo "$(GREEN)✓ Work configuration applied successfully!$(NC)"
-	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
-
-home: backup check ## Apply home configuration (ishandhanani@macbook)
-	@echo "$(BLUE)==> Applying home configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#home -b backup
-	@echo "$(GREEN)✓ Home configuration applied successfully!$(NC)"
-	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
-
-darwin-work: darwin-check ## Apply nix-darwin + Home Manager work macOS configuration
-	@echo "$(BLUE)==> Applying nix-darwin work configuration...$(NC)"
-	@sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#work
-	@echo "$(GREEN)✓ nix-darwin work configuration applied successfully!$(NC)"
-	@echo "$(YELLOW)Run 'make darwin-status' to verify applied settings$(NC)"
-
-darwin-home: ## Apply nix-darwin + Home Manager home macOS configuration
-	@echo "$(BLUE)==> Applying nix-darwin home configuration...$(NC)"
-	@sudo nix run nix-darwin/nix-darwin-25.11#darwin-rebuild -- switch --flake .#home
-	@echo "$(GREEN)✓ nix-darwin home configuration applied successfully!$(NC)"
-
-vm: backup check ## Apply VM configuration (auto-detects user)
-	@echo "$(BLUE)==> Applying VM configuration...$(NC)"
-	@if [ "$(USERNAME)" = "nvidia" ]; then \
-		nix run home-manager/master -- switch --flake .#brev-vm-gpu -b backup; \
-	else \
-		nix run home-manager/master -- switch --flake .#brev-vm -b backup; \
-	fi
-	@echo "$(GREEN)✓ VM configuration applied successfully!$(NC)"
-	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
-
-vm-arm: backup check ## Apply VM configuration (ubuntu@linux aarch64)
-	@echo "$(BLUE)==> Applying ARM VM configuration...$(NC)"
-	@nix run home-manager/master -- switch --flake .#brev-vm-arm -b backup
-	@echo "$(GREEN)✓ ARM VM configuration applied successfully!$(NC)"
-	@echo "$(YELLOW)Run 'source ~/.zshrc' or restart your terminal$(NC)"
-
-rebuild: check ## Quick rebuild current configuration
-	@echo "$(BLUE)==> Rebuilding current configuration...$(NC)"
-	@echo "$(YELLOW)Please specify which config to rebuild:$(NC)"
-	@echo "  make work   - for work config"
-	@echo "  make home   - for home config"
-	@echo "  make vm     - for VM config"
-
-clean: ## Clean up Nix store and old generations
-	@echo "$(BLUE)==> Cleaning up...$(NC)"
-	@nix-collect-garbage -d
-	@home-manager expire-generations "-30 days"
-	@echo "$(GREEN)✓ Cleanup complete$(NC)"
-
-update: ## Update flake inputs
-	@echo "$(BLUE)==> Updating flake inputs...$(NC)"
-	@nix flake update
-	@echo "$(GREEN)✓ Flake inputs updated$(NC)"
-
-generations: ## Show home-manager generations
-	@echo "$(BLUE)==> Home Manager generations:$(NC)"
-	@home-manager generations
-
-rollback: ## Rollback to previous generation
-	@echo "$(BLUE)==> Rolling back to previous generation...$(NC)"
-	@home-manager rollback
-	@echo "$(GREEN)✓ Rolled back successfully$(NC)"
+update: ## Update locked Nix dependencies
+	@cd "$(CONFIG_DIR)" && nix flake update

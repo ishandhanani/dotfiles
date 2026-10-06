@@ -6,7 +6,9 @@
 
 {
   home.activation.installGo = lib.hm.dag.entryAfter [ "writeBoundary" "linkGeneration" ] ''
-    if [ -x "$HOME/.local/go/bin/go" ]; then
+    if [[ -n "''${DRY_RUN:-}" ]]; then
+      echo "Would install Go if missing"
+    elif [ -x "$HOME/.local/go/bin/go" ]; then
       echo "go already installed at $HOME/.local/go, skipping"
     else
       echo "Installing Go from go.dev..."

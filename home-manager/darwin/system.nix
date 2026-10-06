@@ -28,7 +28,6 @@ in
 
   users.users.${user}.home = homeDirectory;
 
-  nixpkgs.hostPlatform = "aarch64-darwin";
   nixpkgs.config.allowUnfree = true;
 
   # This machine uses Determinate Nix. Keep nix-darwin from taking over the
@@ -94,6 +93,7 @@ in
     };
 
     CustomUserPreferences = {
+      NSGlobalDomain."com.apple.mouse.scaling" = 3.0;
       "com.raycast.macos" = {
         raycastGlobalHotkey = "Command-49";
         raycastPreferredWindowMode = "default";
@@ -124,9 +124,5 @@ in
     echo "disabling Spotlight hotkeys..." >&2
     ${disableSymbolicHotkey 64 "{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }"}
     ${disableSymbolicHotkey 65 "{ enabled = 0; value = { parameters = (32, 49, 1572864); type = standard; }; }"}
-
-    echo "setting mouse tracking speed..." >&2
-    launchctl asuser "$(id -u -- "$primary_user")" sudo --user="$primary_user" -- \
-      defaults write -g com.apple.mouse.scaling -float 3.0
   '';
 }
