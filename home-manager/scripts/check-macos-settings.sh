@@ -53,6 +53,31 @@ check_string() {
   fi
 }
 
+check_file() {
+  local label="$1"
+  local path="$2"
+
+  if [[ -e "$path" ]]; then
+    ok "${label}: ${path}"
+  else
+    bad "${label}: missing ${path}"
+  fi
+}
+
+check_file_contains() {
+  local label="$1"
+  local path="$2"
+  local pattern="$3"
+
+  if [[ ! -e "$path" ]]; then
+    bad "${label}: missing ${path}"
+  elif /usr/bin/grep -Fq "$pattern" "$path"; then
+    ok "${label}: ${path}"
+  else
+    bad "${label}: expected ${path} to contain ${pattern}"
+  fi
+}
+
 check_disabled_or_unset() {
   local label="$1"
   local actual="$2"
@@ -118,6 +143,11 @@ check_chrome_extension_policy() {
   done
 }
 
+check_rectangle_defaults() {
+  check_number "Rectangle launch on login" "$(read_default com.knollsoft.Rectangle launchOnLogin)" "1"
+  check_number "Rectangle alternate shortcuts" "$(read_default com.knollsoft.Rectangle alternateDefaultShortcuts)" "1"
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   bad "This check is intended for macOS only"
   exit "$failures"
@@ -145,6 +175,12 @@ check_spotlight_hotkey_disabled 65
 
 info "Chrome extensions"
 check_chrome_extension_policy
+
+info "App configs"
+check_file_contains "Ghostty config" "${HOME}/.config/ghostty/config" "working-directory = ${HOME}"
+check_file "Ghostty dark theme" "${HOME}/.config/ghostty/themes/dotfiles-dark"
+check_file "Ghostty light theme" "${HOME}/.config/ghostty/themes/dotfiles-light"
+check_rectangle_defaults
 
 info "Tracked GUI apps"
 "$(dirname "$0")/install-mac-apps.sh" --list

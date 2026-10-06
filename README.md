@@ -6,7 +6,7 @@ Personal dotfiles managed with Home Manager and Nix.
 
 The macOS setup lives under `home-manager/` and has two layers:
 
-- Home Manager manages the user shell, CLI packages, git/vim/zsh config, Cursor settings, and Rectangle defaults.
+- Home Manager manages the user shell, CLI packages, git/vim/zsh config, Cursor settings, Ghostty config, and Rectangle defaults.
 - nix-darwin manages system preferences like keyboard repeat, Caps Lock as Escape, dark mode, Dock/Finder settings, trackpad settings, Raycast on Cmd-Space, disabled Spotlight hotkeys, and Chrome extension policy.
 
 Useful commands:

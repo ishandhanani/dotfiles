@@ -86,7 +86,7 @@ The macOS system module manages:
 - Trackpad click/gesture defaults and tracking speed
 - Raycast on Cmd-Space with Spotlight hotkeys disabled
 - Chrome extension policy from `chrome/extensions.json`
-- Cursor settings and Rectangle defaults from this repository
+- Cursor settings, Ghostty config/themes, and Rectangle defaults from this repository
 
 GUI apps stay outside nix-darwin ownership for now. Install Google Chrome, iTerm2, Raycast, Rectangle, Cursor, Tailscale, Ghostty, bb, and 1Password manually or with the opt-in `scripts/install-mac-apps.sh` bootstrap, which downloads current app installers directly without requiring Homebrew.
 
