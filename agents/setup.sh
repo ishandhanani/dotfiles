@@ -30,6 +30,11 @@ if [[ ! -f "$CLAUDE_SETTINGS_SRC" ]]; then
     exit 1
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+    echo "jq is required to merge $CLAUDE_SETTINGS_SRC into Claude settings" >&2
+    exit 1
+fi
+
 if [[ ! -f "$CLAUDE_STATUSLINE_SRC" ]]; then
     echo "Missing source file: $CLAUDE_STATUSLINE_SRC" >&2
     exit 1
@@ -142,10 +147,23 @@ install_claude_runtime_files() {
     local target_dir="$1"
     local backup_dir="$HOME/.$(basename "$target_dir")-backup-${TIMESTAMP}"
 
-    create_link "$CLAUDE_SETTINGS_SRC" "$target_dir/claude-settings.json" "$backup_dir"
+    local settings="$target_dir/settings.json"
+    local merged
+
+    # Claude Code reads only settings.json, which also holds machine-local keys
+    # (permissions, hooks, model). Merge the tracked keys in; tracked keys win.
+    if [[ -L "$target_dir/claude-settings.json" ]]; then
+        mrm "$target_dir/claude-settings.json"
+    fi
+    [[ -f "$settings" ]] || echo '{}' > "$settings"
+    merged="$(mktemp "$settings.XXXXXX")"
+    jq -s '.[0] * .[1]' "$settings" "$CLAUDE_SETTINGS_SRC" > "$merged"
+    mv "$merged" "$settings"
+    echo "Merged $CLAUDE_SETTINGS_SRC into $settings"
+
     create_link "$CLAUDE_STATUSLINE_SRC" "$target_dir/statusline-command.sh" "$backup_dir"
 
-    echo "  claude-settings.json"
+    echo "  settings.json (merged)"
     echo "  statusline-command.sh"
 }
 
