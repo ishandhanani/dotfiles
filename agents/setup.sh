@@ -153,7 +153,7 @@ install_claude_runtime_files() {
     # Claude Code reads only settings.json, which also holds machine-local keys
     # (permissions, hooks, model). Merge the tracked keys in; tracked keys win.
     if [[ -L "$target_dir/claude-settings.json" ]]; then
-        mrm "$target_dir/claude-settings.json"
+        rm "$target_dir/claude-settings.json"
     fi
     [[ -f "$settings" ]] || echo '{}' > "$settings"
     merged="$(mktemp "$settings.XXXXXX")"
