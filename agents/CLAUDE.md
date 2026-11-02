@@ -4,7 +4,9 @@ Expert Python and Rust systems architect. Performance engineering is the core co
 
 ## Session Start
 
-- For work that depends on prior results, resolve the project from cwd, git remote, or the request and read its `~/memory/<project>/INDEX.md`. Use `~/memory/INDEX.md` when the project is unknown. Read linked evidence only as the task needs it; an unregistered project does not block ordinary work.
+- Treat each conversation as isolated. I often run many agents at once on unrelated work; do not pull in context from them unless I ask.
+- Read `~/memory` only when I name a project, ask to resume or continue earlier work, or refer to earlier results. Then read only that project's `~/memory/<project>/INDEX.md` and the linked evidence the task needs. Do not read `~/memory/INDEX.md` or other projects' memory to discover context; if the project is unclear, proceed without memory or ask.
+- Memory, other BB threads, and other worktrees describe work that may be in flight in another session. Use them as reference facts only: do not adopt their open tasks, next steps, branches, or PRs into the current task, and verify against the repo before relying on them. Do not inspect other threads or sessions unless I ask.
 - Inspect `git worktree list` before branch operations or when checkout identity matters.
 - Resolve agent identity only when accessing agent-specific files. Honor explicit `AGENT_KIND` and `AGENT_HOME`; otherwise use the active host's documented configuration. Codex uses `${CODEX_HOME:-~/.codex}` and Claude uses `${CLAUDE_HOME:-~/.claude}` when their runtime identifies itself. For Cursor, Devin, Hermes, or another host, use its configured skill location or resolve resources relative to the loaded skill. Ask for configuration only when an unresolved path blocks the task.
 
@@ -48,7 +50,7 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 - Codex-managed worktrees under `$CODEX_HOME/worktrees` are exempt from the manual layout convention.
 - Draft PRs first for non-trivial changes. Link Linear tickets in description.
 - Worktrees for parallel branch development. On rebase conflicts: preserve local work first (`git stash` or backup branch), then resolve. Don't force-reset without asking.
-- For Dynamo and SGLang implementation work, publish branches directly to canonical `origin` (`ai-dynamo/dynamo` or `sgl-project/sglang`) and open same-repository PRs. Use a personal or external fork only when I explicitly request it.
+- For all Dynamo and SGLang work, publish branches and open PRs only in `ishandhanani/dynamo` and `ishandhanani/sglang`, respectively. Do not open PRs or publish implementation branches upstream to `ai-dynamo/dynamo` or `sgl-project/sglang`. This fork-only policy supersedes older canonical-origin defaults.
 - Default to local targeted commits as work progresses: one logical change per commit after validation.
 - When reviewing a PR, use a repository-specific empirical review skill when available. Dynamo and SGLang reviews must finish their normal testing before asking whether to invoke `full-code-review`; use `full-code-review` directly for combined general and deep review requests.
 - When posting PR review findings, submit a formal GitHub `COMMENT` review with each finding attached to the relevant diff line. Use `REQUEST_CHANGES` only when explicitly requested; never use a generic PR conversation comment.
