@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import time
 
@@ -244,8 +245,10 @@ def build_wheel(
         prev_dirty = json.loads(dirty_marker.read_text())
         for rel in prev_dirty:
             p = root / rel
-            if p.exists() or p.is_symlink():
+            if p.is_symlink() or p.is_file():
                 p.unlink()
+            elif p.is_dir():
+                shutil.rmtree(p)
         subprocess.run(
             ["tar", "--zstd", "-xf", str(base_archive), "-C", "/src/dynamo"],
             check=True,
@@ -253,17 +256,19 @@ def build_wheel(
         subprocess.run(["python3", "-c", PREP_BASE_SCRIPT], check=True)
         for rel in prev_dirty:
             p = root / rel
-            if p.exists():
+            if p.exists() and not p.is_symlink():
                 os.utime(p, (now, now))
         dirty_marker.unlink()
 
     if changed_files or deleted_files:
-        dirty_marker.write_text(json.dumps(list(changed_files.keys()) + deleted_files))
+        dirty_marker.write_text(json.dumps(sorted(set(changed_files.keys()) | set(deleted_files))))
 
     for rel in deleted_files:
         p = root / rel
-        if p.exists():
+        if p.is_symlink() or p.is_file():
             p.unlink()
+        elif p.is_dir():
+            shutil.rmtree(p)
 
     for rel, data in changed_files.items():
         p = root / rel
@@ -273,20 +278,37 @@ def build_wheel(
 
     subprocess.run(["sccache", "--zero-stats"], check=False, capture_output=True)
 
-    out_dir = "/tmp/wheel-out"
+    out_dir = pathlib.Path("/tmp/wheel-out")
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    maturin_cmd = [
+        "maturin",
+        "build",
+        "--release",
+        "--compression-method",
+        "stored",
+        "--auditwheel",
+        "skip",
+        "--out",
+        str(out_dir),
+    ]
     proc = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f"set -euo pipefail; rm -rf {out_dir} && mkdir -p {out_dir} && "
-            f"cd /src/dynamo/lib/bindings/python && "
-            f"maturin build --release --offline --compression-method stored --auditwheel skip --out {out_dir} || "
-            f"maturin build --release --compression-method stored --auditwheel skip --out {out_dir}",
-        ],
+        [*maturin_cmd, "--offline"],
+        cwd="/src/dynamo/lib/bindings/python",
         check=False,
         capture_output=True,
         text=True,
     )
+    if proc.returncode != 0 and ("--offline" in proc.stderr or "attempting to make an HTTP request" in proc.stderr):
+        proc = subprocess.run(
+            maturin_cmd,
+            cwd="/src/dynamo/lib/bindings/python",
+            check=False,
+            capture_output=True,
+            text=True,
+        )
     if proc.returncode != 0:
         raise RuntimeError(
             f"maturin build failed (exit {proc.returncode})\n"
