@@ -41,7 +41,7 @@ Determine what type of entry this is:
 | Type | Where to write | Example |
 |------|---------------|---------|
 | **Benchmark result** | `benchmarks/results/<date>_<description>/` | New perf numbers, comparison data |
-| **Implementation progress** | Append to existing worklog in project folder | Feature done, endpoint working, integration validated |
+| **Implementation progress** | New entry file in `worklogs/` | Feature done, endpoint working, integration validated |
 | **Design decision** | Specs folder or relevant doc | Changed approach, chose between alternatives |
 | **Bug/investigation** | New or existing doc in project folder | Root cause found, reproduction steps, fix applied |
 | **Finding/insight** | Relevant existing doc, or new file | Discovered behavior, measured something unexpected |
@@ -56,15 +56,22 @@ Format rules:
 - **Include evidence**: actual numbers, command output, log snippets. Not "it was faster."
 - **Link context**: reference file paths, git commits, or other memory docs where relevant.
 
-If appending to an existing worklog, add the new section at the end.
+Write each chronological entry as its own file, `<project>/worklogs/YYYY-MM-DD-<slug>.md`, starting with the `## YYYY-MM-DD: <title>` header. Do not append to a long running worklog file; the nightly dream splits those, and one entry per file lets `INDEX.md` link the exact evidence. Keep an entry under about 15 KB where you can; put bulky raw output in an `experiments/` or `benchmarks/results/` folder and link it.
 
-If creating a new file, use a descriptive name: `FEATURE_NAME_WORKLOG.md`, `BUG_DESCRIPTION.md`, etc.
+For durable conclusions that are not chronological, use `findings/<slug>.md`.
 
 ---
 
-## Step 4: Update Frontmatter
+## Step 4: Update INDEX.md
 
-Update the project INDEX.md frontmatter:
+The project `INDEX.md` is what the next session reads first, so it must be accurate and small (about 4 KB).
+
+- Update its `## Current state` section: 3-6 bullets on what is true now (status, open PRs and branches with heads, worktree paths, next step). Replace bullets your entry supersedes instead of adding beside them.
+- End each bullet with the date it was true and a link to its source entry, e.g. `(as of 2026-11-02, [worklog](worklogs/2026-11-02-candidate-rows.md))`.
+- Write PR refs fully qualified (`ai-dynamo/dynamo#17465`), and check a PR's state with `gh pr view` before you record it.
+- Do not add dated history sections to `INDEX.md`; that history goes in the worklog entry.
+
+Then update the frontmatter:
 
 ```yaml
 last-updated: <today's date>
@@ -105,6 +112,6 @@ If logging to a project that doesn't exist yet in `~/memory/`:
    tags: [relevant, tags]
    ---
    ```
-2. Add a brief description and any initial content
+2. Add a one-paragraph description and a `## Current state` section with dated, linked bullets as in Step 4
 3. Add a row to `~/memory/INDEX.md` registry table
 4. Commit as above
