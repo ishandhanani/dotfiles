@@ -90,7 +90,28 @@ with open("/build/base_hashes.json", "w") as fp:
     json.dump(hashes, fp)
 print(f"Prepared {{len(hashes)}} baseline files with unique mtimes")
 """
-OLD_PREP_B64 = "CmltcG9ydCBoYXNobGliLCBqc29uLCBvcwoKcm9vdCA9ICIvc3JjL2R5bmFtbyIKdF9iYXNlID0gMTcwMDAwMDAwMApoYXNoZXMgPSB7fQpmb3IgZGlycGF0aCwgZGlybmFtZXMsIGZpbGVuYW1lcyBpbiBvcy53YWxrKHJvb3QpOgogICAgZm9yIGYgaW4gZmlsZW5hbWVzOgogICAgICAgIHAgPSBvcy5wYXRoLmpvaW4oZGlycGF0aCwgZikKICAgICAgICBpZiBvcy5wYXRoLmlzbGluayhwKToKICAgICAgICAgICAgY29udGludWUKICAgICAgICByZWwgPSBvcy5wYXRoLnJlbHBhdGgocCwgcm9vdCkKICAgICAgICB3aXRoIG9wZW4ocCwgInJiIikgYXMgZnA6CiAgICAgICAgICAgIGhhc2hlc1tyZWxdID0gaGFzaGxpYi5zaGEyNTYoZnAucmVhZCgpKS5oZXhkaWdlc3QoKQogICAgICAgIG9zLnV0aW1lKHAsICh0X2Jhc2UsIHRfYmFzZSkpCiAgICBvcy51dGltZShkaXJwYXRoLCAodF9iYXNlLCB0X2Jhc2UpKQpvcy5tYWtlZGlycygiL2J1aWxkIiwgZXhpc3Rfb2s9VHJ1ZSkKd2l0aCBvcGVuKCIvYnVpbGQvYmFzZV9oYXNoZXMuanNvbiIsICJ3IikgYXMgZnA6CiAgICBqc29uLmR1bXAoaGFzaGVzLCBmcCkKcHJpbnQoZiJQcmVwYXJlZCB7bGVuKGhhc2hlcyl9IGJhc2VsaW5lIGZpbGVzIGF0IG10aW1lPXt0X2Jhc2V9IikK"
+OLD_PREP_SCRIPT = f"""
+import hashlib, json, os
+
+root = "/src/dynamo"
+t_base = {T_BASE}
+hashes = {{}}
+for dirpath, dirnames, filenames in os.walk(root):
+    for f in filenames:
+        p = os.path.join(dirpath, f)
+        if os.path.islink(p):
+            continue
+        rel = os.path.relpath(p, root)
+        with open(p, "rb") as fp:
+            hashes[rel] = hashlib.sha256(fp.read()).hexdigest()
+        os.utime(p, (t_base, t_base))
+    os.utime(dirpath, (t_base, t_base))
+os.makedirs("/build", exist_ok=True)
+with open("/build/base_hashes.json", "w") as fp:
+    json.dump(hashes, fp)
+print(f"Prepared {{len(hashes)}} baseline files at mtime={{t_base}}")
+"""
+OLD_PREP_B64 = base64.b64encode(OLD_PREP_SCRIPT.encode()).decode()
 PREP_BASE_B64 = base64.b64encode(PREP_BASE_SCRIPT.encode()).decode()
 
 img = (
