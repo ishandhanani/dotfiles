@@ -114,7 +114,7 @@ print(f"Prepared {{len(hashes)}} baseline files at mtime={{t_base}}")
 OLD_PREP_B64 = base64.b64encode(OLD_PREP_SCRIPT.encode()).decode()
 PREP_BASE_B64 = base64.b64encode(PREP_BASE_SCRIPT.encode()).decode()
 
-img = (
+toolchain_img = (
     modal.Image.from_registry("ubuntu:22.04", add_python="3.12")
     .apt_install(
         "build-essential",
@@ -155,7 +155,10 @@ img = (
             "RUSTFLAGS": "-C link-arg=-fuse-ld=mold -C target-cpu=x86-64-v3 -C force-frame-pointers=yes --cfg tokio_unstable",
         }
     )
-    .run_commands(
+)
+
+img = (
+    toolchain_img.run_commands(
         f"tar -I zstd -xf /cache/warm_layer.tar.zst -C / && "
         f"echo {OLD_PREP_B64} | base64 -d | python3",
         volumes={"/cache": cache_vol},
@@ -168,6 +171,36 @@ img = (
         volumes={"/cache": cache_vol},
     )
 )
+
+
+@app.function(
+    image=toolchain_img,
+    volumes={"/cache": cache_vol},
+    cpu=32,
+    memory=65536,
+    timeout=3600,
+)
+def seed_warm_cache(base_src_zst: bytes) -> dict[str, str]:
+    """Bootstrap /cache/base_src.tar.zst, /cache/warm_layer.tar.zst, and /cache/base_hashes.json."""
+    pathlib.Path("/cache/base_src.tar.zst").write_bytes(base_src_zst)
+    subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"set -euo pipefail; "
+            f"rm -rf /src/dynamo /build && mkdir -p /src/dynamo /build/cargo /build/target && "
+            f"tar --zstd -xf /cache/base_src.tar.zst -C /src/dynamo && "
+            f"echo {PREP_BASE_B64} | base64 -d | python3 && "
+            f"cp /build/base_hashes.json /cache/base_hashes.json && "
+            f"cd /src/dynamo/lib/bindings/python && "
+            f"maturin build --release --out /tmp/warm-out && rm -rf /tmp/warm-out && "
+            f"tar -I 'zstd -1 -T0' -cf /cache/warm_layer.tar.zst /src/dynamo /build",
+        ],
+        check=True,
+    )
+    cache_vol.commit()
+    with open("/build/base_hashes.json") as f:
+        return json.load(f)
 
 
 @app.function(
@@ -198,20 +231,35 @@ def build_wheel(
     t0 = time.monotonic()
     root = pathlib.Path("/src/dynamo")
     dirty_marker = pathlib.Path("/build/dirty_files.json")
+    now = time.time()
 
     # If this warm container previously applied a delta, reset those files first
     if dirty_marker.exists():
+        base_archive = pathlib.Path("/cache/base_src.tar.zst")
+        if not base_archive.exists():
+            raise RuntimeError(
+                "Missing /cache/base_src.tar.zst on volume 'dynamo-build-cache'. "
+                "Run `modal run dynamo_build.py --seed-cache` to initialize the baseline archives."
+            )
+        prev_dirty = json.loads(dirty_marker.read_text())
+        for rel in prev_dirty:
+            p = root / rel
+            if p.exists() or p.is_symlink():
+                p.unlink()
         subprocess.run(
-            ["tar", "--zstd", "-xf", "/cache/base_src.tar.zst", "-C", "/src/dynamo"],
+            ["tar", "--zstd", "-xf", str(base_archive), "-C", "/src/dynamo"],
             check=True,
         )
         subprocess.run(["python3", "-c", PREP_BASE_SCRIPT], check=True)
+        for rel in prev_dirty:
+            p = root / rel
+            if p.exists():
+                os.utime(p, (now, now))
         dirty_marker.unlink()
 
     if changed_files or deleted_files:
         dirty_marker.write_text(json.dumps(list(changed_files.keys()) + deleted_files))
 
-    now = time.time()
     for rel in deleted_files:
         p = root / rel
         if p.exists():
@@ -235,10 +283,16 @@ def build_wheel(
             f"maturin build --release --offline --compression-method stored --auditwheel skip --out {out_dir} || "
             f"maturin build --release --compression-method stored --auditwheel skip --out {out_dir}",
         ],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"maturin build failed (exit {proc.returncode})\n"
+            f"--- stdout (tail) ---\n{proc.stdout[-4000:]}\n"
+            f"--- stderr (tail) ---\n{proc.stderr[-8000:]}"
+        )
     stats_out = subprocess.run(
         ["sccache", "--show-stats"], capture_output=True, text=True, check=False
     ).stdout
@@ -313,26 +367,69 @@ def compute_local_delta(src_root: str, base_hashes: dict[str, str]) -> tuple[dic
     return changed, deleted, hasher.hexdigest()[:12]
 
 
+def _pack_local_base_src(src_root: str) -> bytes:
+    tmp_archive = f"/tmp/base_src_{os.getpid()}.tar.zst"
+    excludes = [f"--exclude=./{d}" for d in sorted(SKIP_TOP_DIRS)] + [
+        f"--exclude=*/{d}" for d in sorted(SKIP_SUB_DIRS)
+    ] + [
+        "--exclude=./.tmp-*",
+        "--exclude=./compaction_*",
+        "--exclude=*.so",
+        "--exclude=*.whl",
+        "--exclude=*.pyc",
+    ]
+    subprocess.run(
+        ["tar", "--zstd", "--anchored", *excludes, "-cf", tmp_archive, "-C", src_root, "."],
+        check=True,
+    )
+    try:
+        return pathlib.Path(tmp_archive).read_bytes()
+    finally:
+        pathlib.Path(tmp_archive).unlink(missing_ok=True)
+
+
+def _load_or_fetch_base_hashes(local_hashes_file: str) -> dict[str, str]:
+    if os.path.exists(local_hashes_file):
+        try:
+            with open(local_hashes_file) as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            pathlib.Path(local_hashes_file).unlink(missing_ok=True)
+
+    tmp_file = f"{local_hashes_file}.{os.getpid()}.tmp"
+    try:
+        subprocess.run(
+            ["modal", "volume", "get", "dynamo-build-cache", "base_hashes.json", tmp_file, "--force"],
+            check=True,
+            capture_output=True,
+        )
+        with open(tmp_file) as f:
+            hashes = json.load(f)
+    except (subprocess.CalledProcessError, OSError, json.JSONDecodeError):
+        hashes = get_base_hashes.remote()
+        with open(tmp_file, "w") as f:
+            json.dump(hashes, f)
+    os.replace(tmp_file, local_hashes_file)
+    return hashes
+
+
 @app.local_entrypoint()
-def main() -> None:
+def main(seed_cache: bool = False) -> None:
     t0 = time.monotonic()
     os.makedirs(LOCAL_CACHE_DIR, exist_ok=True)
     local_hashes_file = os.path.join(LOCAL_CACHE_DIR, f"base_hashes_{IMAGE_REV}.json")
 
-    if not os.path.exists(local_hashes_file):
-        try:
-            subprocess.run(
-                ["modal", "volume", "get", "dynamo-build-cache", "base_hashes.json", local_hashes_file, "--force"],
-                check=True,
-                capture_output=True,
-            )
-        except subprocess.CalledProcessError:
-            hashes = get_base_hashes.remote()
-            with open(local_hashes_file, "w") as f:
-                json.dump(hashes, f)
+    if seed_cache:
+        print(f"Seeding warm cache on volume 'dynamo-build-cache' from {SRC}...")
+        hashes = seed_warm_cache.remote(_pack_local_base_src(SRC))
+        tmp_file = f"{local_hashes_file}.{os.getpid()}.tmp"
+        with open(tmp_file, "w") as f:
+            json.dump(hashes, f)
+        os.replace(tmp_file, local_hashes_file)
+        print(f"Seeded {len(hashes)} baseline files in {time.monotonic() - t0:.1f}s")
+        return
 
-    with open(local_hashes_file) as f:
-        base_hashes = json.load(f)
+    base_hashes = _load_or_fetch_base_hashes(local_hashes_file)
 
     t_diff0 = time.monotonic()
     changed, deleted, delta_hash = compute_local_delta(SRC, base_hashes)
