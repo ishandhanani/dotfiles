@@ -1,40 +1,97 @@
-"""Ultra-fast Dynamo wheel builds on Modal with a shared sccache.
+"""Ultra-fast Dynamo wheel builds on Modal using a pre-baked target image + delta RPC + shared sccache.
+
+Architecture:
+    1. Modal Image bakes `/src/dynamo` (clamped to mtime T_BASE=1700000000), `/root/.cargo` (CARGO_HOME),
+       `/build/target` (CARGO_TARGET_DIR with all 810 crates pre-compiled), and `/build/base_hashes.json`
+       onto local container NVMe. Zero FUSE reads for CARGO_HOME or CARGO_TARGET_DIR!
+    2. Local entrypoint hashes the worktree on host disk in ~35ms against `base_hashes.json` and sends
+       ONLY modified/added file bytes (~KB) + deleted paths over the Modal RPC call (no `add_local_dir`
+       upload delay).
+    3. Container writes the delta onto `/src/dynamo` (leaving all unchanged files at T_BASE), runs
+       `maturin build --release` on local NVMe (with `/cache/sccache` Volume backing any recompiled
+       crates across branches/machines), and streams the `.whl` bytes directly back to `./wheels/`.
 
 Usage:
-    modal run ~/modal/dynamo_build.py                  # build ~/dynamo HEAD/worktree
+    modal run ~/modal/dynamo_build.py                  # build ~/dynamo & write wheel to ./wheels/
     DYNAMO_SRC=/path/to/worktree modal run ~/modal/dynamo_build.py
-    modal volume get dynamo-wheels / ./wheels          # fetch wheels after build
-
-Layout:
-    dynamo-build-cache volume: /cache/sccache (SCCACHE_DIR, shared across machines),
-                               /cache/cargo   (CARGO_HOME registry/git cache)
-    dynamo-wheels volume:      /out           (maturin --out, fetched locally after)
-    CARGO_TARGET_DIR stays on ephemeral container disk (fast NVMe); sccache makes
-    rebuilds hit the shared cache anyway.
+    DYNAMO_OUT_DIR=/tmp/wheels modal run ~/modal/dynamo_build.py
+    DYNAMO_CGU=1 modal run ~/modal/dynamo_build.py     # max-perf build (codegen-units=1)
 """
+import base64
+import glob
+import hashlib
+import json
 import os
+import pathlib
 import subprocess
+import time
 
 import modal
 
 SRC = os.path.abspath(os.path.expanduser(os.environ.get("DYNAMO_SRC", "~/dynamo")))
+OUT_DIR = os.path.abspath(os.path.expanduser(os.environ.get("DYNAMO_OUT_DIR", "./wheels")))
+LOCAL_CACHE_DIR = os.path.expanduser("~/.cache/dynamo-modal-build")
+T_BASE = 1700000000
+IMAGE_REV = "v1-ubuntu2204-rust1961-cgu16"
 
 app = modal.App("dynamo-wheel-build")
 
 cache_vol = modal.Volume.from_name("dynamo-build-cache", create_if_missing=True)
 wheel_vol = modal.Volume.from_name("dynamo-wheels", create_if_missing=True)
 
-IGNORE = [
+SKIP_TOP_DIRS = {
     ".git",
     "target",
-    "**/target",
     ".venv",
-    "**/.venv",
     "node_modules",
-    "**/node_modules",
-    ".tmp-*",
-    "*.whl",
-]
+    "__pycache__",
+    ".pytest_cache",
+    "bench",
+    "recipes",
+    "docs",
+    "components",
+    "tests",
+    "benchmarks",
+    "container",
+    "gyms",
+    "agent-docs",
+    "dev",
+    "scripts",
+}
+SKIP_SUB_DIRS = {"target", "__pycache__", ".git", ".venv", "node_modules", ".pytest_cache"}
+SKIP_SUFFIXES = (".so", ".whl", ".pyc", ".pyo")
+
+PREP_BASE_SCRIPT = f"""
+import hashlib, json, os
+
+root = "/src/dynamo"
+t_base = {T_BASE}
+hashes = {{}}
+files = []
+dirs = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirs.append(dirpath)
+    for f in filenames:
+        p = os.path.join(dirpath, f)
+        if os.path.islink(p):
+            continue
+        rel = os.path.relpath(p, root)
+        files.append((rel, p))
+files.sort()
+for idx, (rel, p) in enumerate(files):
+    with open(p, "rb") as fp:
+        hashes[rel] = hashlib.sha256(fp.read()).hexdigest()
+    ts = t_base + idx
+    os.utime(p, (ts, ts))
+for d in dirs:
+    os.utime(d, (t_base, t_base))
+os.makedirs("/build", exist_ok=True)
+with open("/build/base_hashes.json", "w") as fp:
+    json.dump(hashes, fp)
+print(f"Prepared {{len(hashes)}} baseline files with unique mtimes")
+"""
+OLD_PREP_B64 = "CmltcG9ydCBoYXNobGliLCBqc29uLCBvcwoKcm9vdCA9ICIvc3JjL2R5bmFtbyIKdF9iYXNlID0gMTcwMDAwMDAwMApoYXNoZXMgPSB7fQpmb3IgZGlycGF0aCwgZGlybmFtZXMsIGZpbGVuYW1lcyBpbiBvcy53YWxrKHJvb3QpOgogICAgZm9yIGYgaW4gZmlsZW5hbWVzOgogICAgICAgIHAgPSBvcy5wYXRoLmpvaW4oZGlycGF0aCwgZikKICAgICAgICBpZiBvcy5wYXRoLmlzbGluayhwKToKICAgICAgICAgICAgY29udGludWUKICAgICAgICByZWwgPSBvcy5wYXRoLnJlbHBhdGgocCwgcm9vdCkKICAgICAgICB3aXRoIG9wZW4ocCwgInJiIikgYXMgZnA6CiAgICAgICAgICAgIGhhc2hlc1tyZWxdID0gaGFzaGxpYi5zaGEyNTYoZnAucmVhZCgpKS5oZXhkaWdlc3QoKQogICAgICAgIG9zLnV0aW1lKHAsICh0X2Jhc2UsIHRfYmFzZSkpCiAgICBvcy51dGltZShkaXJwYXRoLCAodF9iYXNlLCB0X2Jhc2UpKQpvcy5tYWtlZGlycygiL2J1aWxkIiwgZXhpc3Rfb2s9VHJ1ZSkKd2l0aCBvcGVuKCIvYnVpbGQvYmFzZV9oYXNoZXMuanNvbiIsICJ3IikgYXMgZnA6CiAgICBqc29uLmR1bXAoaGFzaGVzLCBmcCkKcHJpbnQoZiJQcmVwYXJlZCB7bGVuKGhhc2hlcyl9IGJhc2VsaW5lIGZpbGVzIGF0IG10aW1lPXt0X2Jhc2V9IikK"
+PREP_BASE_B64 = base64.b64encode(PREP_BASE_SCRIPT.encode()).decode()
 
 img = (
     modal.Image.from_registry("ubuntu:22.04", add_python="3.12")
@@ -53,41 +110,55 @@ img = (
         "patchelf",
         "pkg-config",
         "unzip",
+        "zstd",
     )
     .run_commands(
-        # uv for fast python-side installs
         "curl -LsSf https://astral.sh/uv/install.sh | sh",
-        # pinned toolchain matching rust-toolchain.toml
         "curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.96.1 --profile minimal",
-        # prebuilt sccache binary (matches container/use-sccache.sh version)
         "curl -L https://github.com/mozilla/sccache/releases/download/v0.14.0/sccache-v0.14.0-x86_64-unknown-linux-musl.tar.gz | tar xz --strip-components=1 -C /usr/local/bin --wildcards '*/sccache'",
-        # jammy protoc is 3.12, too old for proto3 optional; use upstream binary
         "curl -L -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v25.8/protoc-25.8-linux-x86_64.zip && unzip -o /tmp/protoc.zip -d /usr/local && rm /tmp/protoc.zip",
         "/root/.local/bin/uv tool install maturin",
     )
     .env(
         {
             "PATH": "/root/.cargo/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            # shared caches on the volume
             "SCCACHE_DIR": "/cache/sccache",
             "SCCACHE_CACHE_SIZE": "200G",
             "SCCACHE_IDLE_TIMEOUT": "0",
-            "CARGO_HOME": "/cache/cargo",
+            "CARGO_HOME": "/build/cargo",
+            "CARGO_REGISTRIES_CRATES_IO_PROTOCOL": "sparse",
             "RUSTC_WRAPPER": "sccache",
             "CARGO_INCREMENTAL": "0",
-            # workspace sets codegen-units=1 (serial, max-perf). 16 keeps thin
-            # LTO but parallelizes codegen; set DYNAMO_CGU=1 for perf builds.
             "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": os.environ.get("DYNAMO_CGU", "16"),
-            # target persists on the volume: warm rebuilds skip unchanged crates
-            # entirely instead of replaying rustc through sccache
-            "CARGO_TARGET_DIR": "/cache/target",
-            # env RUSTFLAGS replaces .cargo/config.toml rustflags, so the repo's
-            # own flags (v3, ffp, tokio_unstable) must be repeated here
+            "CARGO_TARGET_DIR": "/build/target",
             "RUSTFLAGS": "-C link-arg=-fuse-ld=mold -C target-cpu=x86-64-v3 -C force-frame-pointers=yes --cfg tokio_unstable",
         }
     )
-    .add_local_dir(SRC, "/src/dynamo", ignore=IGNORE)
+    .run_commands(
+        f"tar -I zstd -xf /cache/warm_layer.tar.zst -C / && "
+        f"echo {OLD_PREP_B64} | base64 -d | python3",
+        volumes={"/cache": cache_vol},
+    )
+    .run_commands(
+        f"echo {PREP_BASE_B64} | base64 -d | python3 && "
+        f"cd /src/dynamo/lib/bindings/python && "
+        f"maturin build --release --offline --out /tmp/w && rm -rf /tmp/w && "
+        f"sccache --show-stats",
+        volumes={"/cache": cache_vol},
+    )
 )
+
+
+@app.function(
+    image=img,
+    volumes={"/cache": cache_vol},
+    cpu=32,
+    memory=65536,
+    timeout=3600,
+)
+def get_base_hashes() -> dict[str, str]:
+    with open("/build/base_hashes.json") as f:
+        return json.load(f)
 
 
 @app.function(
@@ -97,33 +168,183 @@ img = (
     memory=65536,
     timeout=3600,
 )
-def build_wheel(sha: str) -> str:
-    subprocess.run(
+def build_wheel(
+    tag: str,
+    changed_files: dict[str, bytes],
+    deleted_files: list[str],
+    save_to_volume: bool = False,
+) -> tuple[str, bytes, float, float, str]:
+    t0 = time.monotonic()
+    root = pathlib.Path("/src/dynamo")
+    dirty_marker = pathlib.Path("/build/dirty_files.json")
+
+    # If this warm container previously applied a delta, reset those files first
+    if dirty_marker.exists():
+        subprocess.run(
+            ["tar", "--zstd", "-xf", "/cache/base_src.tar.zst", "-C", "/src/dynamo"],
+            check=True,
+        )
+        subprocess.run(["python3", "-c", PREP_BASE_SCRIPT], check=True)
+        dirty_marker.unlink()
+
+    if changed_files or deleted_files:
+        dirty_marker.write_text(json.dumps(list(changed_files.keys()) + deleted_files))
+
+    now = time.time()
+    for rel in deleted_files:
+        p = root / rel
+        if p.exists():
+            p.unlink()
+
+    for rel, data in changed_files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+        os.utime(p, (now, now))
+
+    subprocess.run(["sccache", "--zero-stats"], check=False, capture_output=True)
+
+    out_dir = "/tmp/wheel-out"
+    proc = subprocess.run(
         [
             "bash",
             "-c",
-            "set -euo pipefail; "
-            "cd /src/dynamo/lib/bindings/python && "
-            f"maturin build --release --out /out/{sha} && "
-            "sccache --show-stats",
+            f"set -euo pipefail; rm -rf {out_dir} && mkdir -p {out_dir} && "
+            f"cd /src/dynamo/lib/bindings/python && "
+            f"maturin build --release --offline --compression-method stored --auditwheel skip --out {out_dir} || "
+            f"maturin build --release --compression-method stored --auditwheel skip --out {out_dir}",
         ],
         check=True,
+        capture_output=True,
+        text=True,
     )
-    wheel_vol.commit()
-    return sha
+    stats_out = subprocess.run(
+        ["sccache", "--show-stats"], capture_output=True, text=True, check=False
+    ).stdout
+    build_secs = time.monotonic() - t0
+
+    wheels = sorted(glob.glob(f"{out_dir}/*.whl"))
+    if not wheels:
+        raise RuntimeError(f"No wheel found in {out_dir}\n{proc.stdout}\n{proc.stderr}")
+    whl_path = pathlib.Path(wheels[-1])
+    zst_path = pathlib.Path(f"{whl_path}.zst")
+    subprocess.run(["zstd", "-1", "-T0", "-q", "-f", str(whl_path), "-o", str(zst_path)], check=True)
+    whl_zst_bytes = zst_path.read_bytes()
+
+    t_commit0 = time.monotonic()
+    # Only commit cache_vol if sccache actually wrote new cache entries
+    wrote_sccache = False
+    for line in stats_out.splitlines():
+        if line.strip().startswith("Cache misses") and not line.strip().startswith("Cache misses ("):
+            parts = line.split()
+            if parts and parts[-1].isdigit() and int(parts[-1]) > 0:
+                wrote_sccache = True
+    if wrote_sccache:
+        cache_vol.commit()
+    if save_to_volume:
+        vol_dir = pathlib.Path(f"/out/{tag}")
+        vol_dir.mkdir(parents=True, exist_ok=True)
+        (vol_dir / whl_path.name).write_bytes(whl_path.read_bytes())
+        wheel_vol.commit()
+    commit_secs = time.monotonic() - t_commit0
+
+    return whl_path.name, whl_zst_bytes, build_secs, commit_secs, proc.stderr.strip()
+
+
+def compute_local_delta(src_root: str, base_hashes: dict[str, str]) -> tuple[dict[str, bytes], list[str], str]:
+    changed: dict[str, bytes] = {}
+    seen: set[str] = set()
+    hasher = hashlib.sha256()
+
+    for dirpath, dirnames, filenames in os.walk(src_root):
+        if dirpath == src_root:
+            dirnames[:] = [
+                d
+                for d in sorted(dirnames)
+                if d not in SKIP_TOP_DIRS
+                and not d.startswith(".tmp-")
+                and not d.startswith("compaction_")
+            ]
+        else:
+            dirnames[:] = [d for d in sorted(dirnames) if d not in SKIP_SUB_DIRS]
+        for fname in sorted(filenames):
+            if fname.endswith(SKIP_SUFFIXES):
+                continue
+            full = os.path.join(dirpath, fname)
+            if os.path.islink(full):
+                continue
+            rel = os.path.relpath(full, src_root)
+            seen.add(rel)
+            try:
+                data = pathlib.Path(full).read_bytes()
+            except OSError:
+                continue
+            h = hashlib.sha256(data).hexdigest()
+            if base_hashes.get(rel) != h:
+                changed[rel] = data
+                hasher.update(rel.encode())
+                hasher.update(h.encode())
+
+    deleted = sorted(set(base_hashes.keys()) - seen)
+    for rel in deleted:
+        hasher.update(f"DEL:{rel}".encode())
+
+    return changed, deleted, hasher.hexdigest()[:12]
 
 
 @app.local_entrypoint()
 def main() -> None:
+    t0 = time.monotonic()
+    os.makedirs(LOCAL_CACHE_DIR, exist_ok=True)
+    local_hashes_file = os.path.join(LOCAL_CACHE_DIR, f"base_hashes_{IMAGE_REV}.json")
+
+    if not os.path.exists(local_hashes_file):
+        try:
+            subprocess.run(
+                ["modal", "volume", "get", "dynamo-build-cache", "base_hashes.json", local_hashes_file, "--force"],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError:
+            hashes = get_base_hashes.remote()
+            with open(local_hashes_file, "w") as f:
+                json.dump(hashes, f)
+
+    with open(local_hashes_file) as f:
+        base_hashes = json.load(f)
+
+    t_diff0 = time.monotonic()
+    changed, deleted, delta_hash = compute_local_delta(SRC, base_hashes)
+    diff_ms = (time.monotonic() - t_diff0) * 1000
+
     sha = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=SRC
     ).stdout.strip() or "no-git"
-    diff_hash = subprocess.run(
-        ["bash", "-c", "git diff | sha256sum | cut -d' ' -f1"],
-        capture_output=True, text=True, cwd=SRC,
-    ).stdout.strip()
-    print(f"Building {SRC} @ {sha} (diff {diff_hash[:16]})")
-    tag = f"{sha}-d{diff_hash[:12]}"
-    build_wheel.remote(tag)
-    print(f"\nDone. Wheels are on volume 'dynamo-wheels' under /{tag}/")
-    print(f"Fetch with:  modal volume get dynamo-wheels {tag} ./wheels-{sha[:8]}")
+    tag = f"{sha[:12]}-d{delta_hash}"
+    delta_kb = sum(len(v) for v in changed.values()) / 1024
+    print(
+        f"Building {SRC} @ {sha[:12]} | local diff: {len(changed)} modified/added ({delta_kb:.1f} KiB), "
+        f"{len(deleted)} deleted in {diff_ms:.0f}ms"
+    )
+
+    save_vol = os.environ.get("DYNAMO_SAVE_VOLUME", "0") == "1"
+    whl_name, whl_zst_bytes, build_secs, commit_secs, cargo_log = build_wheel.remote(
+        tag, changed, deleted, save_vol
+    )
+
+    os.makedirs(OUT_DIR, exist_ok=True)
+    local_whl = os.path.join(OUT_DIR, whl_name)
+    local_zst = f"{local_whl}.zst"
+    with open(local_zst, "wb") as f:
+        f.write(whl_zst_bytes)
+    subprocess.run(["zstd", "-d", "-q", "-f", "--rm", local_zst, "-o", local_whl], check=True)
+
+    total_secs = time.monotonic() - t0
+    for line in cargo_log.splitlines()[-8:]:
+        if line.strip():
+            print(f"  {line}")
+    print(
+        f"\nTiming: remote_build={build_secs:.2f}s  vol_commit={commit_secs:.2f}s  "
+        f"e2e_wall={total_secs:.2f}s  wire={len(whl_zst_bytes)/1e6:.1f}MB"
+    )
+    print(f"Wheel ready: {local_whl}")
