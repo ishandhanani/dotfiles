@@ -26,7 +26,7 @@ Record meaningful session output to `~/memory/<project>/` so future sessions hav
 
 Determine the active project:
 
-1. Check cwd and git remote against `~/memory/INDEX.md` registry
+1. Match the cwd or git remote against project frontmatter: `grep -l "<repo path or remote>" ~/memory/*/INDEX.md`
 2. If no match, check if the user's prompt or recent work maps to a known project
 3. If still no match, ask the user
 
@@ -79,7 +79,7 @@ last-updated: <today's date>
 
 If the project status changed (e.g., work completed), update `status` too.
 
-Also update `~/memory/INDEX.md` registry table to keep the "Last Active" column current.
+Do not edit the root `~/memory/INDEX.md` project table; the nightly dream generates it from project frontmatter and git.
 
 ---
 
@@ -110,8 +110,8 @@ If logging to a project that doesn't exist yet in `~/memory/`:
    status: active
    last-updated: <today>
    tags: [relevant, tags]
+   summary: "<one line: what the project is, not its status>"
    ---
    ```
 2. Add a one-paragraph description and a `## Current state` section with dated, linked bullets as in Step 4
-3. Add a row to `~/memory/INDEX.md` registry table
-4. Commit as above
+3. Commit as above (the root table picks the project up on the next dream)

@@ -11,9 +11,9 @@ git log --since=$FROM --until=$TO --name-only --pretty=format: | grep -v '^$' \
   | sed 's#/.*##' | sort | uniq -c | sort -rn
 ```
 
-Then read `$HOME/memory/INDEX.md` (the registry table: status, repo, last-active, one-line description per project) and intersect:
+Then read `$HOME/memory/INDEX.md` (the registry table, generated nightly: status, last-active date of the newest project commit, and a one-line summary per project; repo paths live in each project's frontmatter) and intersect:
 - Include projects with **in-window commits** AND/OR a `last-updated` inside the window.
-- The registry's one-line descriptions are nearly status-ready bullets — use them to scope, then read each active project's own `INDEX.md` for the numbers and PR mappings.
+- The registry's one-line summaries say what each project is, not its status: use them to scope, then read each active project's own `INDEX.md` (`## Current state`) for the numbers and PR mappings.
 
 **Dates gate inclusion.** A project last active before `FROM` does NOT belong in the update even if its PRs are famous (e.g. the async-openai migration was March work — memory's dates correctly exclude it from a May–June report). Trust memory's dates over your sense of "recent".
 
