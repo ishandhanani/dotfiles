@@ -9,7 +9,7 @@ DYNAMO_SRC=/path/to/worktree <skill-dir>/dynamo_cargo.py "cargo check --workspac
 ```
 
 - The command runs with `bash -c` in `/src/dynamo`, so `cd lib/bindings/python && cargo check --locked` works.
-- The complete output goes to a log file (default `/tmp/dynamo_cargo.<slot>.log`, or `DYNAMO_CARGO_LOG`). The script prints the path. There is no live stream.
+- The complete output goes to a log file (default `/tmp/dynamo_cargo.<slot>.<random>.log`, unique per call, or `DYNAMO_CARGO_LOG`). The script prints the path. There is no live stream.
 - The script's exit code is the remote command's exit code.
 - What is sent: tracked plus untracked non-ignored files, minus top-level `recipes/`, `docs/`, `benchmarks/`, `container/`. Uncommitted edits are included, so the run reflects the working tree, not `HEAD`.
 
@@ -17,7 +17,7 @@ DYNAMO_SRC=/path/to/worktree <skill-dir>/dynamo_cargo.py "cargo check --workspac
 |---|---|---|
 | `DYNAMO_SRC` | Worktree to build | `~/dynamo` |
 | `DYNAMO_CARGO_SLOT` | Slot name | basename of `DYNAMO_SRC` |
-| `DYNAMO_CARGO_LOG` | Where the complete output is written | `/tmp/dynamo_cargo.<slot>.log` |
+| `DYNAMO_CARGO_LOG` | Where the complete output is written | `/tmp/dynamo_cargo.<slot>.<random>.log` |
 
 ## How it stays warm
 

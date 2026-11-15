@@ -30,11 +30,12 @@ Run:
 Environment:
     DYNAMO_SRC          worktree to build (default ~/dynamo)
     DYNAMO_CARGO_SLOT   slot name (default: basename of DYNAMO_SRC)
-    DYNAMO_CARGO_LOG    where the complete output is written (default /tmp/dynamo_cargo.<slot>.log)
+    DYNAMO_CARGO_LOG    where the complete output is written (default /tmp/dynamo_cargo.<slot>.<random>.log, unique per call)
 
 Maintenance:
-    dynamo_cargo.py --save-base     snapshot this slot's tree and target dir as the shared base
-                                    (do it from a slot that just built main)
+    dynamo_cargo.py --save-base     snapshot this slot's tree, target dir and sync manifest as the
+                                    shared base (do it from a slot that just built main; re-run it
+                                    after deploying, older bases lack the manifest)
     dynamo_cargo.py --reset         delete this slot's source tree and target dir
 
 The script's exit code is the remote command's exit code. Calls to one slot run one at a
@@ -48,6 +49,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 import modal
@@ -58,8 +60,9 @@ BASE_TAR = "/cache/dev_base/base.tar.zst"
 SKIP_TOP_DIRS = {"recipes", "docs", "benchmarks", "container"}
 SRC_DIR = "/src/dynamo"
 TARGET_DIR = "/build/target"
-# List of files the last sync wrote; kept inside the target dir so the base snapshot carries it.
-MANIFEST = "/build/target/.dynamo_sync_manifest"
+# Paths the last sync wrote. Kept outside the target dir so `cargo clean` cannot drop it;
+# the base snapshot carries it.
+MANIFEST = "/build/dynamo_sync_manifest"
 
 app = modal.App(APP_NAME)
 cache_vol = modal.Volume.from_name("dynamo-build-cache", create_if_missing=True)
@@ -170,9 +173,11 @@ class Cargo:
         # Delete only paths that an earlier sync put there and the worktree no longer has.
         # A plain `rsync --delete` would also remove files the build generates inside the
         # source tree (the C bindings header, for one) and force their build scripts to rerun.
+        # os.walk lists symlinks to directories in `dirs` and does not follow them.
         current = set()
-        for root, _, files in os.walk(incoming):
-            for name in files:
+        for root, dirs, files in os.walk(incoming):
+            names = files + [d for d in dirs if os.path.islink(os.path.join(root, d))]
+            for name in names:
                 current.add(os.path.relpath(os.path.join(root, name), incoming))
         previous = set()
         if os.path.exists(MANIFEST):
@@ -182,8 +187,13 @@ class Cargo:
         for rel in removed:
             try:
                 os.remove(os.path.join(SRC_DIR, rel))
-            except FileNotFoundError:
+            except (FileNotFoundError, IsADirectoryError):
                 pass
+        # mrsync cannot replace a non-empty directory with a file or symlink: clear those first.
+        for rel in current:
+            dst = os.path.join(SRC_DIR, rel)
+            if os.path.isdir(dst) and not os.path.islink(dst):
+                shutil.rmtree(dst)
         sync = subprocess.run(
             ["rsync", "-rlpc", "--itemize-changes", f"{incoming}/", f"{SRC_DIR}/"],
             check=True,
@@ -244,7 +254,7 @@ class Cargo:
         subprocess.run(["sccache", "--stop-server"], check=False, capture_output=True)
         os.makedirs(os.path.dirname(BASE_TAR), exist_ok=True)
         _sh(
-            f"tar -c -C / {SRC_DIR.lstrip('/')} {TARGET_DIR.lstrip('/')} | zstd -1 -T0 -o {BASE_TAR}.tmp -f"
+            f"tar -c -C / {SRC_DIR.lstrip('/')} {TARGET_DIR.lstrip('/')} {MANIFEST.lstrip('/')} | zstd -1 -T0 -o {BASE_TAR}.tmp -f"
             f" && mv {BASE_TAR}.tmp {BASE_TAR}",
             check=True,
         )
@@ -257,6 +267,8 @@ class Cargo:
     def reset(self) -> str:
         shutil.rmtree(SRC_DIR, ignore_errors=True)
         shutil.rmtree(TARGET_DIR, ignore_errors=True)
+        if os.path.exists(MANIFEST):
+            os.remove(MANIFEST)
         return f"slot {self.slot}: source tree and target dir deleted"
 
 
@@ -290,7 +302,10 @@ def _client(argv: list[str]) -> int:
         if argv[0] == "--reset":
             print(f"[dynamo-cargo] {cargo.reset.remote()}")
             return 0
-        log_out = os.environ.get("DYNAMO_CARGO_LOG", f"/tmp/dynamo_cargo.{slot}.log")
+        log_out = os.environ.get("DYNAMO_CARGO_LOG")
+        if not log_out:
+            fd, log_out = tempfile.mkstemp(prefix=f"dynamo_cargo.{slot}.", suffix=".log")
+            os.close(fd)
         t0 = time.time()
         code, log_zst = cargo.run.remote(_pack_worktree(src), argv[0])
     except modal.exception.NotFoundError:

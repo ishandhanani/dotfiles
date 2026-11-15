@@ -33,4 +33,3 @@ Both pieces use the Modal volume `dynamo-build-cache` in the `nvidia` workspace,
 - Do not create a Modal app per run for cargo work. `dynamo_cargo.py` calls one deployed app; if it reports the app is missing, deploy it once with `modal deploy <skill-dir>/dynamo_cargo.py`.
 - One slot per worktree (the default). Agents that share a worktree share its slot and take turns.
 - Read results from the log file the script names, not from a live stream.
-- The `nvidia` workspace has a limit of 2,000 deployed apps and is near it. Do not deploy copies of these apps under other names.
