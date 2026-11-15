@@ -1,16 +1,11 @@
----
-name: dynamo-wheel-build
-description: Build Dynamo Python wheels on Modal with a shared sccache and pre-baked NVMe target image instead of on the host. Use for rebuilding ai_dynamo_runtime wheels, offloading Rust compile CPU/disk from a constrained host, or building in a checkout that has no local Rust toolchain. Faster than local builds once warm and leaves zero build artifacts on the host.
----
-
-# Dynamo Wheel Build
+# Wheel builds
 
 Offload `lib/bindings/python` maturin builds to Modal. All Rust caches (`CARGO_HOME`, `CARGO_TARGET_DIR`, baseline source tree) are baked into the Modal container image on local NVMe, and `sccache` persists on Modal volume `dynamo-build-cache` across branches/machines. The host keeps no `target/` dir, no `CARGO_HOME` growth, and no Rust toolchain.
 
 ## Prerequisites
 
 - `modal` CLI (`uv tool install modal`) and `zstd` (`apt-get install -y zstd`), authenticated to the `nvidia` workspace (`modal token new --profile nvidia`; the browser session must be signed in to nvidia, not a personal account), environment `dynamo` (`modal config set-environment dynamo`).
-- Build script: `dynamo_build.py` in this skill's directory (also symlinked at `~/modal/dynamo_build.py`). It defaults to `~/dynamo`; override with `DYNAMO_SRC`.
+- Build script: `dynamo_build.py` in the skill directory (also symlinked at `~/modal/dynamo_build.py`). It defaults to `~/dynamo`; override with `DYNAMO_SRC`.
 
 ## Build and install
 

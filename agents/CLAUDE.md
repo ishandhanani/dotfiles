@@ -37,7 +37,7 @@ Use the `memory-log` skill for meaningful results. Do not log routine edits.
 - Before Python/build/test work, inspect `$VIRTUAL_ENV` and the active checkout's `<root>/.venv`. Use or create only `<root>/.venv`; never copy, symlink, reuse, or mutate another checkout's venv. Verify editable imports resolve inside the active checkout.
 
 ### Build Commands
-- **Dynamo** (Rust + Python): prefer the `dynamo-wheel-build` skill (builds `ai_dynamo_runtime` on Modal with a shared sccache + persistent target volume in ~4s warm, zero host `target/` disk), then `cd <root> && uv pip install -e .`. Local fallback only when Modal is unavailable: `cd <root>/lib/bindings/python && CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target" maturin develop --uv && cd <root> && uv pip install -e .` -- keep targets per worktree; never share them across worktrees.
+- **Dynamo** (Rust + Python): prefer the `dynamo-modal-build` skill. Its wheel piece builds `ai_dynamo_runtime` on Modal with a shared sccache + persistent target volume in ~4s warm, zero host `target/` disk; then `cd <root> && uv pip install -e .`. Its cargo piece runs `cargo check`, `clippy` and `test` for any worktree on one warm Modal app that all agents share (one slot per worktree, about 40 s to rebuild after a small `dynamo-llm` edit); use it for Rust checks and tests in place of a local `target/`. Local fallback only when Modal is unavailable: `cd <root>/lib/bindings/python && CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target" maturin develop --uv && cd <root> && uv pip install -e .` -- keep targets per worktree; never share them across worktrees.
 - **SGLang** (Python): `cd <root> && uv pip install -e "python"`
 - **aiperf** (Python): `cd ~/aiperf && uv pip install -e .`
 
