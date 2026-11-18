@@ -56,7 +56,7 @@ Format rules:
 - **Include evidence**: actual numbers, command output, log snippets. Not "it was faster."
 - **Link context**: reference file paths, git commits, or other memory docs where relevant.
 
-Write each chronological entry as its own file, `<project>/worklogs/YYYY-MM-DD-<slug>.md`, starting with the `## YYYY-MM-DD: <title>` header. Do not append to a long running worklog file; the nightly dream splits those, and one entry per file lets `INDEX.md` link the exact evidence. Keep an entry under about 15 KB where you can; put bulky raw output in an `experiments/` or `benchmarks/results/` folder and link it.
+Write each chronological entry as its own file, `<project>/worklogs/YYYY-MM-DD-<slug>.md`, starting with the `## YYYY-MM-DD: <title>` header. Do not append to a shared month file yourself (concurrent sessions would conflict); one entry per file also lets `INDEX.md` link the exact evidence. The nightly dream folds small entries older than two weeks into `worklogs/YYYY-MM.md` and repoints links, so do not worry about the file count. Keep an entry under about 15 KB where you can; put bulky raw output in an `experiments/` or `benchmarks/results/` folder and link it.
 
 For durable conclusions that are not chronological, use `findings/<slug>.md`.
 
