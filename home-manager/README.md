@@ -17,7 +17,7 @@ make apply
 
 `make setup-macos` builds the local nix-darwin configuration as your user, then requests sudo to register and activate that built system. It applies keyboard and pointer settings, Caps Lock to Escape, Dock/Finder/appearance settings, Raycast and Spotlight hotkeys, and Chrome extension policy. It then installs missing GUI apps. Run it on a new Mac or after changing `darwin/system.nix`; it does not run Home Manager.
 
-`make apply` builds and activates standalone Home Manager without sudo. Home Manager owns shell/editor configuration, Nix packages, Cursor settings, Ghostty config, and Rectangle preferences and shortcuts. Brev is built from the configured branch in `clis.nix`. The `rust.nix`, `go.nix`, `uvx.nix`, and `agents.nix` modules install missing external tools during user activation, skipping existing installations. The custom agent CLI release remains Linux x86-64 only.
+`make apply` builds and activates standalone Home Manager without sudo. Home Manager owns shell/editor configuration, Nix packages, Cursor settings, Ghostty config, Rex config (`rex/init.lua`), and Rectangle preferences and shortcuts. Brev is built from the configured branch in `clis.nix`. The `rust.nix`, `go.nix`, `uvx.nix`, and `agents.nix` modules install missing external tools during user activation, skipping existing installations. The custom agent CLI release remains Linux x86-64 only.
 
 Nix supplies build and installer dependencies, including Go for Brev and uv for Python tools. Vendor installations happen after Home Manager links the dotfiles; a tool installation failure exits nonzero and can leave an activation partially applied. Rerun `make apply` after resolving the failure.
 
