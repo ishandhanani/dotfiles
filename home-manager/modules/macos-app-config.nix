@@ -15,7 +15,6 @@ in {
     xdg.configFile."ghostty/config".text = builtins.replaceStrings
       [ "/Users/ishandhanani" ] [ config.home.homeDirectory ]
       (builtins.readFile ../../ghostty/config);
-    xdg.configFile."rex/init.lua".source = ../../rex/init.lua;
 
     # Write individual keys so unrelated app preferences survive an apply.
     home.activation.rectangleDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ]
